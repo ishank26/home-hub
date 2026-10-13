@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings and sync status</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div style="width: 1280px; height: 800px; display: flex; overflow: hidden; background: #FBFAF7; color: #1F2328; font-family: 'Atkinson Hyperlegible', system-ui, sans-serif">
+  <dc-import name="Sidebar" active="settings" sync="stale" hint-size="180px,800px"></dc-import>
+  <main style="flex: 1; min-width: 0; box-sizing: border-box; padding: 22px 32px 20px; display: flex; flex-direction: column; gap: 14px">
+    <h1 style="margin: 0; font-size: 32px">Settings</h1>
+    <div style="flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px">
+      <section style="background: #FFFFFF; border: 1px solid #E6E2D9; border-radius: 20px; padding: 16px 22px; display: flex; flex-direction: column">
+        <h2 style="margin: 4px 0 6px; font-size: 22px">Sync status</h2>
+        <sc-for list="{{sources}}" as="s" hint-placeholder-count="5">
+          <div style="display: flex; align-items: center; gap: 14px; min-height: 76px; border-top: 1px solid #EFECE5">
+            <span aria-hidden="true" style="width: 14px; height: 14px; border-radius: 999px; background: {{s.dot}}; flex: none"></span>
+            <div style="flex: 1; display: flex; flex-direction: column">
+              <span style="font-size: 21px; font-weight: 700">{{s.name}}</span>
+              <span style="font-size: 17px; color: {{s.noteColor}}">{{s.note}}</span>
+            </div>
+            <button type="button" style="min-height: 52px; padding: 0 18px; border-radius: 12px; border: 1px solid {{s.btnBorder}}; background: {{s.btnBg}}; color: {{s.btnFg}}; font: inherit; font-size: 18px; font-weight: 700">{{s.action}}</button>
+          </div>
+        </sc-for>
+      </section>
+      <section style="background: #FFFFFF; border: 1px solid #E6E2D9; border-radius: 20px; padding: 16px 22px; display: flex; flex-direction: column">
+        <h2 style="margin: 4px 0 6px; font-size: 22px">Display &amp; screensaver</h2>
+        <div style="display: flex; align-items: center; justify-content: space-between; min-height: 72px; border-top: 1px solid #EFECE5">
+          <span style="font-size: 20px">Clock</span>
+          <div role="group" aria-label="Clock format" style="display: flex; padding: 4px; border-radius: 12px; background: #EFECE5">
+            <button type="button" aria-pressed="true" style="min-height: 48px; padding: 0 18px; border: 0; border-radius: 9px; background: #1F5FD1; color: #FFFFFF; font: inherit; font-size: 18px; font-weight: 700">12 h</button>
+            <button type="button" style="min-height: 48px; padding: 0 18px; border: 0; border-radius: 9px; background: transparent; color: #2A2F36; font: inherit; font-size: 18px">24 h</button>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; min-height: 72px; border-top: 1px solid #EFECE5">
+          <span style="font-size: 20px">Temperature</span>
+          <div role="group" aria-label="Temperature unit" style="display: flex; padding: 4px; border-radius: 12px; background: #EFECE5">
+            <button type="button" aria-pressed="true" style="min-height: 48px; padding: 0 18px; border: 0; border-radius: 9px; background: #1F5FD1; color: #FFFFFF; font: inherit; font-size: 18px; font-weight: 700">°F</button>
+            <button type="button" style="min-height: 48px; padding: 0 18px; border: 0; border-radius: 9px; background: transparent; color: #2A2F36; font: inherit; font-size: 18px">°C</button>
+          </div>
+        </div>
+        <sc-for list="{{steppers}}" as="st" hint-placeholder-count="2">
+          <div style="display: flex; align-items: center; justify-content: space-between; min-height: 72px; border-top: 1px solid #EFECE5">
+            <span style="font-size: 20px">{{st.label}}</span>
+            <div style="display: flex; align-items: center; gap: 10px">
+              <button type="button" aria-label="{{st.less}}" onClick="{{st.dec}}" style="width: 52px; height: 52px; border-radius: 12px; border: 1px solid #C9C4B8; background: #FFFFFF; font: inherit; font-size: 26px; color: #1F2328">−</button>
+              <span style="min-width: 84px; text-align: center; font-size: 22px; font-weight: 700">{{st.value}}</span>
+              <button type="button" aria-label="{{st.more}}" onClick="{{st.inc}}" style="width: 52px; height: 52px; border-radius: 12px; border: 1px solid #C9C4B8; background: #FFFFFF; font: inherit; font-size: 26px; color: #1F2328">+</button>
+            </div>
+          </div>
+        </sc-for>
+        <div style="display: flex; align-items: center; justify-content: space-between; min-height: 72px; border-top: 1px solid #EFECE5">
+          <span style="font-size: 20px">Quiet hours</span>
+          <button type="button" style="min-height: 52px; padding: 0 18px; border-radius: 12px; border: 1px solid #C9C4B8; background: #FFFFFF; font: inherit; font-size: 19px; font-weight: 700; color: #1F2328">10:00 PM – 6:00 AM · Dark clock</button>
+        </div>
+      </section>
+    </div>
+    <div style="display: flex; align-items: center; gap: 18px; min-height: 56px; padding: 0 20px; border-radius: 14px; background: #F1EFE9; font-size: 17px; color: #2F3640">
+      <span style="flex: 1">Diagnostics: WebView [version] · 1280 × 800 · storage [free] · last error none</span>
+      <span>Admin: hold two fingers for 3 s</span>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { idle: 3, photo: 30 }; }
+  renderVals() {
+    const ok = (name, note) => ({ name, note, dot: '#15803D', noteColor: '#3A4048', action: 'Refresh', btnBg: '#FFFFFF', btnFg: '#1F2328', btnBorder: '#C9C4B8' });
+    const { idle, photo } = this.state;
+    return {
+      sources: [
+        ok('Calendar', 'Current · updated 7:40 AM'),
+        ok('Weather', 'Current · observed 7:35 AM'),
+        { name: 'Aura photos', note: 'Stale · last success 5:30 AM (2 h). Showing cached photos.', dot: '#B45309', noteColor: '#7A3608',
+          action: 'Retry', btnBg: '#1F5FD1', btnFg: '#FFFFFF', btnBorder: '#1F5FD1' },
+        ok('Shopping (HA to-do)', 'Current · updated 7:40 AM'),
+        ok('Home Assistant', 'Connected · [n] entities allowlisted')
+      ],
+      steppers: [
+        { label: 'Screensaver after', value: idle + ' min', less: 'Shorter delay', more: 'Longer delay',
+          dec: () => this.setState({ idle: Math.max(1, idle - 1) }), inc: () => this.setState({ idle: Math.min(30, idle + 1) }) },
+        { label: 'New photo every', value: photo + ' s', less: 'Faster photos', more: 'Slower photos',
+          dec: () => this.setState({ photo: Math.max(10, photo - 10) }), inc: () => this.setState({ photo: Math.min(300, photo + 10) }) }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

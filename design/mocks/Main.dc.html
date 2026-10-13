@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Home Hub revised requirements</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&amp;family=Fraunces:ital,opsz,wght@0,9..144,500;1,9..144,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1F5FD1}a:hover{color:#174AA6}
+</style>
+</helmet>
+<div style="width: 1280px; height: 2280px; box-sizing: border-box; padding: 72px 80px; background: #FBFAF7; color: #1F2328; font-family: 'Atkinson Hyperlegible', system-ui, sans-serif; display: flex; flex-direction: column; gap: 40px">
+  <header style="display: flex; flex-direction: column; gap: 12px">
+    <div style="font-size: 16px; letter-spacing: 0.12em; text-transform: uppercase; color: #5A606A; font-weight: 700">Humblestead Home Hub · Product specification</div>
+    <h1 style="margin: 0; font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 60px; line-height: 1.05">Revised requirements v1.1 <span style="color: #5A606A; font-size: 36px">draft</span></h1>
+    <p style="margin: 0; font-size: 21px; line-height: 1.5; max-width: 980px; color: #3A4048">Changes against v1.0 (12 Oct 2026), from the visual audit of the first mockups. Target: 10.1-inch landscape frame on a kitchen wall, read from 1–3 m by the whole family; custom web UI on an older Android WebView; data and credentials on the home server.</p>
+    <div style="display: flex; gap: 12px; flex-wrap: wrap; font-size: 16px; font-weight: 700">
+      <span style="padding: 6px 14px; border-radius: 999px; background: #E3ECFB; color: #143E8C">Confirmed: from v1.0 / owner</span>
+      <span style="padding: 6px 14px; border-radius: 999px; background: #FCE9D9; color: #7A3608">Changed: differs from v1.0</span>
+      <span style="padding: 6px 14px; border-radius: 999px; background: #E2F2EE; color: #0B5A4F">New: not in v1.0</span>
+    </div>
+  </header>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px">
+
+    <section style="background: #FFFFFF; border: 1px solid #E6E2D9; border-radius: 20px; padding: 28px 32px; display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 26px">1 · Legibility &amp; touch</h2>
+      <ul style="margin: 0; padding-left: 22px; font-size: 19px; line-height: 1.55; display: flex; flex-direction: column; gap: 6px">
+        <li><b style="color: #7A3608">Changed</b> Touch targets ≥ 56 × 56 px (v1.0: 44): wet or busy kitchen hands. Whole list rows tappable.</li>
+        <li><b style="color: #0B5A4F">New</b> Type floor: clock ≥ 96 px, key values ≥ 28 px, body ≥ 20 px, nothing below 16 px.</li>
+        <li><b style="color: #0B5A4F">New</b> Contrast ≥ 4.5:1 for all text, 3:1 for icons and borders. No light-grey secondary text; tinted chips carry dark text.</li>
+        <li><b style="color: #143E8C">Confirmed</b> Charcoal on warm white, one restrained blue accent, no unneeded animation.</li>
+      </ul>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E6E2D9; border-radius: 20px; padding: 28px 32px; display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 26px">2 · Navigation</h2>
+      <ul style="margin: 0; padding-left: 22px; font-size: 19px; line-height: 1.55; display: flex; flex-direction: column; gap: 6px">
+        <li><b style="color: #143E8C">Confirmed</b> Fixed 180 px left sidebar, icon + short label, in this exact order on every screen: Today, Calendar, Shopping, Weather, Quotes, Photos, Smart Home, Settings. Each entry appears once.</li>
+        <li><b style="color: #7A3608">Changed</b> Quotes and Photos are separate views (the mockup merged them).</li>
+        <li><b style="color: #0B5A4F">New</b> Sidebar footer shows overall sync health; tapping it opens Settings.</li>
+        <li><b style="color: #0B5A4F">New</b> After 2 min idle on any tab, return to Today before the screensaver.</li>
+      </ul>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E6E2D9; border-radius: 20px; padding: 28px 32px; display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 26px">3 · Screensaver, wake &amp; night</h2>
+      <ul style="margin: 0; padding-left: 22px; font-size: 19px; line-height: 1.55; display: flex; flex-direction: column; gap: 6px">
+        <li><b style="color: #143E8C">Confirmed</b> 3 min idle → full-bleed Aura photo; swipe up wakes to Today (no passcode).</li>
+        <li><b style="color: #7A3608">Changed</b> Photo interval 30 s (v1.0 proposed 15 s): calmer and lighter on the frame.</li>
+        <li><b style="color: #0B5A4F">New</b> Clock sits on a soft bottom scrim; no page dots. Clock position drifts a few px each minute (burn-in).</li>
+        <li><b style="color: #0B5A4F">New</b> A tap shows "Swipe up to open" for 3 s; it never changes tabs.</li>
+        <li><b style="color: #7A3608">Changed</b> Night (quiet hours, default 22:00–06:00): dark clock at low brightness plus the next morning item; no photos. Settles open decision §9.</li>
+      </ul>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E6E2D9; border-radius: 20px; padding: 28px 32px; display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 26px">4 · Alert strip (global)</h2>
+      <ul style="margin: 0; padding-left: 22px; font-size: 19px; line-height: 1.55; display: flex; flex-direction: column; gap: 6px">
+        <li><b style="color: #0B5A4F">New</b> One-line strip at the top of the main area, hidden when empty. Highest severity first, at most one line plus "+n more".</li>
+        <li>Sources only from the server allowlist: door contact open longer than [N] min, weather alert, sync failure, Home Assistant offline.</li>
+        <li>Tap opens the relevant tab. It replaces the optional smart-home status line on Today.</li>
+        <li>Never shows camera images or personal message content.</li>
+      </ul>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E6E2D9; border-radius: 20px; padding: 28px 32px; display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 26px">5 · Today</h2>
+      <ul style="margin: 0; padding-left: 22px; font-size: 19px; line-height: 1.55; display: flex; flex-direction: column; gap: 6px">
+        <li><b style="color: #143E8C">Confirmed</b> Large clock and date, compact weather, next 2–4 events, shopping preview, one quote. No vertical scroll.</li>
+        <li><b style="color: #0B5A4F">New</b> Events show relative time ("Now", "in 25 min") and their calendar color.</li>
+        <li><b style="color: #0B5A4F">New</b> Weather tile adds the next rain window ("Rain from 3 PM").</li>
+        <li><b style="color: #7A3608">Changed</b> Quote becomes a one-line footer, not a hero card; the space goes to Next up.</li>
+        <li><b style="color: #143E8C">Confirmed</b> Shopping shows the open count plus up to 3 items.</li>
+      </ul>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E6E2D9; border-radius: 20px; padding: 28px 32px; display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 26px">6 · Calendar</h2>
+      <ul style="margin: 0; padding-left: 22px; font-size: 19px; line-height: 1.55; display: flex; flex-direction: column; gap: 6px">
+        <li><b style="color: #7A3608">Changed</b> Default view is 3-day (Day, 3-day, Week, Month remain).</li>
+        <li><b style="color: #143E8C">Confirmed</b> Current-time line, all-day row, Today button, previous/next, date picker.</li>
+        <li><b style="color: #0B5A4F">New</b> The legend is the filter: each calendar is a toggle chip with its color. Colors differ in lightness as well as hue.</li>
+        <li><b style="color: #0B5A4F">New</b> Overlapping events sit side by side; visible window 7 AM–6 PM with scroll for other hours.</li>
+      </ul>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E6E2D9; border-radius: 20px; padding: 28px 32px; display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 26px">7 · Shopping</h2>
+      <ul style="margin: 0; padding-left: 22px; font-size: 19px; line-height: 1.55; display: flex; flex-direction: column; gap: 6px">
+        <li><b style="color: #143E8C">Confirmed</b> Categories Produce, Dairy, Pantry, Household, Other; quantity and notes; large checkboxes; undo on delete.</li>
+        <li><b style="color: #0B5A4F">New</b> Quick-add chips for frequent items, next to the text field.</li>
+        <li><b style="color: #0B5A4F">New</b> Completed items collapse into one group with "Clear completed".</li>
+        <li><b style="color: #143E8C">Confirmed</b> Per-item sync state is shown: "Saving…", "Not saved · Retry". Never a false success.</li>
+      </ul>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E6E2D9; border-radius: 20px; padding: 28px 32px; display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 26px">8 · Weather</h2>
+      <ul style="margin: 0; padding-left: 22px; font-size: 19px; line-height: 1.55; display: flex; flex-direction: column; gap: 6px">
+        <li><b style="color: #143E8C">Confirmed</b> Observed current conditions are labelled apart from forecast values, with source and update time.</li>
+        <li><b style="color: #143E8C">Confirmed</b> Hourly strip with chance of rain; 7-day cards with chance of rain or snow.</li>
+        <li><b style="color: #7A3608">Changed</b> Detail metrics (wind, humidity, UV, sun times) become a secondary grid; rain and temperature lead.</li>
+        <li><b style="color: #143E8C">Confirmed</b> Fields the provider omits are left out, never filled with placeholders.</li>
+      </ul>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E6E2D9; border-radius: 20px; padding: 28px 32px; display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 26px">9 · Smart Home: your devices only</h2>
+      <ul style="margin: 0; padding-left: 22px; font-size: 19px; line-height: 1.55; display: flex; flex-direction: column; gap: 6px">
+        <li><b style="color: #7A3608">Changed</b> Thermostat, smart lock and garage door removed from the mocks: none are in the device inventory.</li>
+        <li><b style="color: #0B5A4F">New</b> Order: door-contact status (T110), then scene buttons (Good Morning, Movie Night, All Off), then room light tiles (Govee H6008, Twinkly), then cameras.</li>
+        <li><b style="color: #143E8C">Confirmed</b> Camera snapshots refresh every 30–60 s; at most one live view, opened on tap. The D205 doorbell stays "pending verification" until the integration is confirmed.</li>
+        <li><b style="color: #0B5A4F">New</b> Every command shows "Sending…" and then the state Home Assistant confirms, with a 5 s Undo for lights and scenes.</li>
+      </ul>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E6E2D9; border-radius: 20px; padding: 28px 32px; display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 26px">10 · Frame performance (WebView ~106, ~1 GB)</h2>
+      <ul style="margin: 0; padding-left: 22px; font-size: 19px; line-height: 1.55; display: flex; flex-direction: column; gap: 6px">
+        <li><b style="color: #0B5A4F">New</b> No live <code>backdrop-filter</code> blur; the server pre-renders a blurred copy of each photo if one is needed.</li>
+        <li><b style="color: #0B5A4F">New</b> Fonts are self-hosted (two families, three weights at most); no web-font calls from the frame.</li>
+        <li><b style="color: #143E8C">Confirmed</b> Only one mounted view; unmount hidden tabs and camera tiles. Server-made thumbnails and display copies only.</li>
+        <li><b style="color: #0B5A4F">New</b> At most one shadow per card; crossfades only; budget of 200 KB JS gzipped.</li>
+      </ul>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E6E2D9; border-radius: 20px; padding: 28px 32px; display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 26px">11 · Architecture &amp; privacy</h2>
+      <ul style="margin: 0; padding-left: 22px; font-size: 19px; line-height: 1.55; display: flex; flex-direction: column; gap: 6px">
+        <li><b style="color: #0B5A4F">New</b> A dedicated dashboard backend on the home server holds a scoped Home Assistant token and the Aura secrets. The frame never talks to Home Assistant directly; HA keeps its private bridge and loopback UI.</li>
+        <li><b style="color: #0B5A4F">New</b> Camera snapshots and doorbell events stay in the dashboard backend; they never enter the Hermes assistant.</li>
+        <li><b style="color: #143E8C">Confirmed</b> No password or token in the URL, bundle, logs or responses to the frame.</li>
+      </ul>
+    </section>
+
+    <section style="background: #FFFFFF; border: 1px solid #E6E2D9; border-radius: 20px; padding: 28px 32px; display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 26px">12 · Settings &amp; honest states</h2>
+      <ul style="margin: 0; padding-left: 22px; font-size: 19px; line-height: 1.55; display: flex; flex-direction: column; gap: 6px">
+        <li><b style="color: #143E8C">Confirmed</b> Sync status per source with last success; display, screensaver and quiet-hours settings; diagnostics; admin path.</li>
+        <li><b style="color: #0B5A4F">New</b> Each source has three visible states: current, stale (amber, with age) and failed (with Retry). Stale data is never shown as live.</li>
+        <li><b style="color: #0B5A4F">New</b> The admin mode button requires the two-finger hold from §4.3; it is never a single tap.</li>
+      </ul>
+    </section>
+  </div>
+
+  <section style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px">
+    <div style="background: #E2F2EE; border-radius: 20px; padding: 28px 32px; display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 26px; color: #0B4A41">Decisions taken in this draft</h2>
+      <ul style="margin: 0; padding-left: 22px; font-size: 19px; line-height: 1.55; color: #123A35">
+        <li>Wake always lands on Today.</li>
+        <li>Screensaver after 3 min; photo every 30 s.</li>
+        <li>Night is a dark dim clock, not screen-off: the frame is also the kitchen clock.</li>
+        <li>Shopping source: Home Assistant to-do (editable from the HA phone app too).</li>
+      </ul>
+    </div>
+    <div style="background: #FCE9D9; border-radius: 20px; padding: 28px 32px; display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 26px; color: #6A2E06">Still open</h2>
+      <ul style="margin: 0; padding-left: 22px; font-size: 19px; line-height: 1.55; color: #4F2205">
+        <li>Calendar source: direct server-side Google sync (richer detail) or HA calendar entities?</li>
+        <li>Door-contact alert threshold [N] min, and which doors.</li>
+        <li>Calendar names and colors per family member.</li>
+        <li>Home location, units and quote categories.</li>
+        <li>Exact frame model and WebView version (phase 0).</li>
+      </ul>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":2280}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

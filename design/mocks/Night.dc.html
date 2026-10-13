@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Night mode</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div style="width: 1280px; height: 800px; box-sizing: border-box; padding: 0 0 96px; background: #0B0C0E; color: #9C958A; font-family: 'Atkinson Hyperlegible', system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; position: relative">
+  <div style="font-size: 220px; font-weight: 700; line-height: 1; letter-spacing: -0.02em">10:48</div>
+  <div style="font-size: 32px">Thursday, October 10 · 55°</div>
+  <div style="margin-top: 22px; display: flex; align-items: center; gap: 14px; padding: 14px 24px; border-radius: 999px; border: 1px solid #2A2C30; font-size: 24px">
+    <span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 999px; background: #3E6FB8"></span>Tomorrow 9:00 AM · Dentist
+  </div>
+  <sc-if value="{{alert}}" hint-placeholder-val="{{ true }}">
+    <div style="position: absolute; top: 32px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; padding: 12px 22px; border-radius: 999px; background: #2A1A0E; color: #E2A36B; font-size: 22px">
+      <span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 999px; background: #E2A36B"></span>Back door is open
+    </div>
+  </sc-if>
+  <div style="position: absolute; bottom: 36px; font-size: 18px; color: #8C867C">Quiet hours until 6:00 AM · tap to brighten</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"alert":{"editor":"boolean","default":false},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() { return { alert: this.props.alert ?? false }; }
+}
+</script>
+</body>
+</html>

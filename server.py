@@ -1,0 +1,459 @@
+#!/usr/bin/env python3
+"""Humblestead Home Hub backend: static UI plus a small JSON API.
+
+Standard library only. Binds 127.0.0.1 by default; pass --host and one or more
+--allow addresses to serve the frame on the LAN. Credentials (Home Assistant,
+Aura, calendar) belong in adapters on this server and never reach the browser.
+Until those adapters exist every response is marked "source": "sample".
+"""
+import argparse
+import copy
+import ipaddress
+import json
+import os
+import re
+import tempfile
+import threading
+import time
+import uuid
+from datetime import datetime, timedelta
+from http import HTTPStatus
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import parse_qs
+
+ROOT = Path(__file__).resolve().parent
+STATIC = ROOT / 'static'
+DATA = Path(os.environ.get('HOME_HUB_DATA', ROOT / 'data'))
+CATEGORIES = ('Produce', 'Dairy', 'Pantry', 'Household', 'Other')
+MAX_BODY = 16384
+LOCK = threading.Lock()
+
+
+def now():
+    return datetime.now().astimezone()
+
+
+def iso(dt):
+    return dt.isoformat(timespec='seconds')
+
+
+class Store:
+    """Small JSON documents written atomically; one lock for all writers."""
+
+    def __init__(self, directory):
+        self.dir = Path(directory)
+        self.dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+
+    def read(self, name, default):
+        path = self.dir / (name + '.json')
+        try:
+            return json.loads(path.read_text())
+        except FileNotFoundError:
+            return default
+        except (OSError, ValueError):
+            return default
+
+    def write(self, name, value):
+        path = self.dir / (name + '.json')
+        fd, tmp = tempfile.mkstemp(dir=self.dir, prefix='.' + name)
+        try:
+            with os.fdopen(fd, 'w') as handle:
+                json.dump(value, handle, indent=1, sort_keys=True)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp, path)
+        except BaseException:
+            Path(tmp).unlink(missing_ok=True)
+            raise
+
+
+DEFAULT_SETTINGS = {
+    'clock24h': False, 'units': 'F', 'idleMinutes': 3, 'photoSeconds': 30,
+    'quietStart': '22:00', 'quietEnd': '06:00', 'returnTodayMinutes': 2,
+}
+
+SAMPLE_SHOPPING = [
+    ('Avocados', '3', 'Produce'), ('Bananas', '1 bunch', 'Produce'), ('Tomatoes', '4', 'Produce'),
+    ('Milk', '1 gal', 'Dairy'), ('Eggs', '12', 'Dairy'), ('Coffee beans', '1 bag', 'Pantry'),
+    ('Pasta', '2 boxes', 'Pantry'), ('Paper towels', '6 rolls', 'Household'),
+]
+
+QUICK_ADD = ['Bread', 'Yogurt', 'Apples', 'Dish soap']
+
+CALENDARS = [
+    {'id': 'family', 'name': 'Family', 'color': 'blue'},
+    {'id': 'work', 'name': 'Work', 'color': 'orange'},
+    {'id': 'school', 'name': 'School', 'color': 'teal'},
+    {'id': 'sports', 'name': 'Sports', 'color': 'purple'},
+]
+
+
+def sample_events(start):
+    """Recurring sample week anchored to the current local day."""
+    day0 = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    plan = [
+        (0, 8, 0, 30, 'Team standup', 'work', ''), (0, 12, 0, 60, 'Lunch with Sarah', 'family', ''),
+        (0, 16, 30, 60, 'Soccer practice', 'sports', 'Field 2'), (0, 18, 0, 60, 'Dinner at home', 'family', ''),
+        (1, 9, 0, 60, 'Dentist', 'family', ''), (1, 9, 30, 60, 'School concert', 'school', 'Auditorium'),
+        (1, 14, 0, 45, 'Grocery pickup', 'family', ''), (2, 8, 0, 180, 'Hike with friends', 'family', ''),
+        (2, 13, 0, 120, 'Soccer game', 'sports', ''), (3, 10, 0, 60, 'Brunch', 'family', ''),
+        (4, 8, 0, 30, 'Team standup', 'work', ''), (5, 15, 30, 60, 'Piano lesson', 'school', ''),
+        (6, 19, 0, 90, 'Book club', 'family', ''),
+    ]
+    events = []
+    for offset, h, m, minutes, title, cal, where in plan:
+        begin = day0 + timedelta(days=offset, hours=h, minutes=m)
+        events.append({'id': f'e{offset}{h:02d}{m:02d}', 'title': title, 'calendar': cal, 'location': where,
+                       'start': iso(begin), 'end': iso(begin + timedelta(minutes=minutes)), 'allDay': False})
+    for offset, title, cal in ((1, 'No school', 'school'), (2, 'Grandma visiting', 'family')):
+        begin = day0 + timedelta(days=offset)
+        events.append({'id': f'a{offset}', 'title': title, 'calendar': cal, 'location': '', 'allDay': True,
+                       'start': iso(begin), 'end': iso(begin + timedelta(days=1))})
+    return events
+
+
+def sample_weather(at):
+    hour = at.replace(minute=0, second=0, microsecond=0)
+    temps = [62, 64, 66, 68, 70, 71, 70, 66, 63, 60, 58, 57]
+    pops = [0, 0, 5, 10, 20, 30, 45, 60, 55, 40, 20, 10]
+    kinds = ['sun'] * 4 + ['cloud'] * 3 + ['rain'] * 3 + ['cloud'] * 2
+    hourly = [{'time': iso(hour + timedelta(hours=i)), 'temp': temps[i], 'pop': pops[i], 'kind': kinds[i]}
+              for i in range(12)]
+    days = [(72, 54, 60, 'rain', 'Rain later'), (68, 52, 20, 'cloud', 'Cloudy'), (65, 50, 70, 'rain', 'Showers'),
+            (66, 51, 30, 'cloud', 'Mostly cloudy'), (70, 53, 0, 'sun', 'Sunny'), (71, 55, 5, 'sun', 'Sunny'),
+            (69, 54, 15, 'cloud', 'Cloudy')]
+    base = at.replace(hour=0, minute=0, second=0, microsecond=0)
+    daily = [{'date': iso(base + timedelta(days=i)), 'hi': hi, 'lo': lo, 'pop': pop, 'kind': kind, 'summary': s}
+             for i, (hi, lo, pop, kind, s) in enumerate(days)]
+    return {
+        'source': 'sample', 'location': '[Home location]', 'provider': '[Provider]',
+        'observedAt': iso(at - timedelta(minutes=7)), 'forecastAt': iso(at - timedelta(minutes=12)),
+        'current': {'temp': 62, 'feelsLike': 60, 'kind': 'sun', 'summary': 'Clear', 'wind': '5 mph',
+                    'humidity': 48, 'uv': '2 Low', 'sunrise': '7:18 AM', 'sunset': '6:32 PM'},
+        'hourly': hourly, 'daily': daily, 'alerts': [],
+    }
+
+
+SAMPLE_HOME = {
+    'contacts': [
+        {'id': 'front', 'name': 'Front door', 'open': False},
+        {'id': 'back', 'name': 'Back door', 'open': True, 'openMinutes': 12},
+        {'id': 'patio', 'name': 'Patio door', 'open': False},
+    ],
+    'hub': {'name': 'Tapo H100 hub', 'online': True},
+    'scenes': [
+        {'id': 'good_morning', 'name': 'Good Morning', 'lights': {'living': True, 'kitchen': True, 'bedroom': False, 'twinkly': False}},
+        {'id': 'movie_night', 'name': 'Movie Night', 'lights': {'living': True, 'kitchen': False, 'bedroom': False, 'twinkly': True}},
+        {'id': 'all_off', 'name': 'All Off', 'lights': {'living': False, 'kitchen': False, 'bedroom': False, 'twinkly': False}},
+    ],
+    'lights': [
+        {'id': 'living', 'name': 'Living room', 'detail': 'Govee · 2 bulbs', 'on': True, 'brightness': 70},
+        {'id': 'kitchen', 'name': 'Kitchen', 'detail': 'Govee · 3 bulbs', 'on': True, 'brightness': 100},
+        {'id': 'bedroom', 'name': 'Bedroom', 'detail': 'Govee · 1 bulb', 'on': False, 'brightness': 40},
+        {'id': 'twinkly', 'name': 'Twinkly lights', 'detail': 'Seasonal', 'on': False, 'brightness': None},
+    ],
+    'cameras': [
+        {'id': 'entry', 'name': 'Entryway · C110'},
+        {'id': 'backyard', 'name': 'Backyard · C246D'},
+    ],
+    'doorbell': {'name': 'Doorbell (D205)', 'verified': False},
+}
+
+QUOTES = [
+    {'text': 'Well done is better than well said.', 'author': 'Benjamin Franklin', 'source': 'Poor Richard’s Almanack, 1737'},
+    {'text': 'The best way out is always through.', 'author': 'Robert Frost', 'source': 'A Servant to Servants, 1914'},
+    {'text': 'Hope is the thing with feathers.', 'author': 'Emily Dickinson', 'source': 'Poem 254 (Johnson numbering)'},
+    {'text': 'Not all those who wander are lost.', 'author': 'J. R. R. Tolkien', 'source': 'The Fellowship of the Ring, 1954'},
+]
+
+PHOTO_TONES = [('#7FA2B3', '#3E5560'), ('#C9B48E', '#6E5536'), ('#9DB58F', '#3F5A37'), ('#B4A3BE', '#5A4366'),
+               ('#B9AE9C', '#5C5040'), ('#8FA9BF', '#3A5670'), ('#C4A58C', '#6B4630'), ('#98B3A5', '#3B5C4D')]
+
+
+def photo_svg(index):
+    sky, land = PHOTO_TONES[index % len(PHOTO_TONES)]
+    shift = (index * 97) % 400
+    return ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 800" preserveAspectRatio="xMidYMid slice">'
+            f'<rect width="1280" height="800" fill="{sky}"/>'
+            f'<path d="M0 470 L{120 + shift // 3} 250 L{300 + shift // 4} 380 '
+            f'L{480 + shift // 5} 150 L{700 + shift // 6} 400 L{900 + shift // 8} 230 '
+            f'L1280 430 L1280 800 L0 800Z" fill="{land}" opacity="0.75"/>'
+            f'<path d="M0 560 L240 440 L460 530 L700 450 L940 540 L1280 480 L1280 800 L0 800Z" fill="{land}"/>'
+            f'<rect y="640" width="1280" height="160" fill="{land}" opacity="0.85"/></svg>')
+
+
+class Hub:
+    def __init__(self, store):
+        self.store = store
+        if self.store.read('shopping', None) is None:
+            created = iso(now())
+            self.store.write('shopping', {'items': [
+                {'id': uuid.uuid4().hex[:12], 'name': n, 'qty': q, 'category': c, 'done': False, 'created': created}
+                for n, q, c in SAMPLE_SHOPPING]})
+        self.home = copy.deepcopy(SAMPLE_HOME)
+
+    def settings(self):
+        value = dict(DEFAULT_SETTINGS)
+        value.update(self.store.read('settings', {}))
+        return value
+
+    def shopping(self):
+        return {'source': 'local', 'updatedAt': iso(now()), 'categories': list(CATEGORIES), 'quickAdd': QUICK_ADD,
+                **self.store.read('shopping', {'items': []})}
+
+    def mutate_shopping(self, change):
+        with LOCK:
+            data = self.store.read('shopping', {'items': []})
+            change(data['items'])
+            self.store.write('shopping', data)
+        return self.shopping()
+
+    def calendar(self, start, end):
+        events = [e for e in sample_events(now())
+                  if datetime.fromisoformat(e['end']) > start and datetime.fromisoformat(e['start']) < end]
+        return {'source': 'sample', 'updatedAt': iso(now()), 'calendars': CALENDARS, 'events': events}
+
+    def status(self):
+        t = now()
+        return {'sources': [
+            {'id': 'calendar', 'name': 'Calendar', 'state': 'sample', 'updatedAt': iso(t)},
+            {'id': 'weather', 'name': 'Weather', 'state': 'sample', 'updatedAt': iso(t)},
+            {'id': 'photos', 'name': 'Aura photos', 'state': 'sample', 'updatedAt': iso(t)},
+            {'id': 'shopping', 'name': 'Shopping', 'state': 'current', 'updatedAt': iso(t)},
+            {'id': 'home', 'name': 'Home Assistant', 'state': 'sample', 'updatedAt': iso(t)},
+        ]}
+
+    def alerts(self):
+        found = []
+        for contact in self.home['contacts']:
+            if contact['open'] and contact.get('openMinutes', 0) >= 10:
+                found.append({'severity': 'warn', 'text': contact['name'] + ' is open',
+                              'detail': f"{contact['openMinutes']} min", 'view': 'home'})
+        return found
+
+    def home_action(self, body):
+        kind = body.get('kind')
+        if kind == 'light':
+            light = next((item for item in self.home['lights'] if item['id'] == body.get('id')), None)
+            if light is None or type(body.get('on')) is not bool:
+                raise ValueError('unknown light')
+            light['on'] = body['on']
+            return {'result': 'confirmed', 'message': light['name'] + (' on' if light['on'] else ' off')}
+        if kind == 'scene':
+            scene = next((s for s in self.home['scenes'] if s['id'] == body.get('id')), None)
+            if scene is None:
+                raise ValueError('unknown scene')
+            for light in self.home['lights']:
+                light['on'] = scene['lights'][light['id']]
+            return {'result': 'confirmed', 'message': scene['name']}
+        raise ValueError('unsupported action')
+
+
+NAME = re.compile(r'^[^\x00-\x1f]{1,60}$')
+
+
+def clean_item(body):
+    if not all(isinstance(body.get(key, ''), str) for key in ('name', 'qty', 'notes')):
+        raise ValueError('item fields')
+    name = body.get('name', '').strip()
+    qty = body.get('qty', '').strip()[:30]
+    notes = body.get('notes', '').strip()
+    if len(notes) > 120 or any(ord(c) < 32 for c in notes):
+        raise ValueError('item notes')
+    category = body.get('category') if body.get('category') in CATEGORIES else 'Other'
+    if not NAME.fullmatch(name):
+        raise ValueError('item name')
+    return name, qty, category, notes
+
+
+def make_handler(hub, allowed):
+    class Handler(SimpleHTTPRequestHandler):
+        server_version = 'HomeHub/0.1'
+        sys_version = ''
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=str(STATIC), **kwargs)
+
+        def log_message(self, format, *args):
+            pass
+
+        def allowed(self):
+            peer = ipaddress.ip_address(self.client_address[0])
+            if peer.is_loopback or any(peer in net for net in allowed):
+                return True
+            self.send_error(HTTPStatus.FORBIDDEN)
+            return False
+
+        def end_headers(self):
+            self.send_header('Cache-Control', 'no-store' if self.path.startswith('/api/') else 'max-age=300')
+            self.send_header('X-Content-Type-Options', 'nosniff')
+            self.send_header('Referrer-Policy', 'no-referrer')
+            super().end_headers()
+
+        def reply(self, value, status=200):
+            raw = json.dumps(value).encode()
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def body(self):
+            # A JSON content type forces a CORS preflight, which this server never
+            # answers, so other web pages on an allowed machine cannot write here.
+            if self.headers.get('Content-Type', '').split(';')[0].strip() != 'application/json':
+                raise ValueError('content type')
+            length = int(self.headers.get('Content-Length', '0'))
+            if not 0 < length <= MAX_BODY:
+                raise ValueError('body size')
+            try:
+                value = json.loads(self.rfile.read(length))
+            except (ValueError, UnicodeDecodeError) as error:
+                raise ValueError('invalid JSON') from error
+            if not isinstance(value, dict):
+                raise ValueError('body shape')
+            return value
+
+        def do_HEAD(self):
+            if self.allowed():
+                super().do_HEAD()
+
+        def do_GET(self):
+            if not self.allowed():
+                return
+            path, _, query = self.path.partition('?')
+            try:
+                params = {k: v[0] for k, v in parse_qs(query, max_num_fields=8).items()}
+                if path == '/api/today':
+                    t = now()
+                    events = [e for e in hub.calendar(t, t + timedelta(days=1))['events']
+                              if not e['allDay'] and e['end'] > iso(t)][:4]
+                    shop = [i for i in hub.shopping()['items'] if not i['done']]
+                    shop.sort(key=lambda i: i['created'], reverse=True)
+                    q = QUOTES[t.toordinal() % len(QUOTES)]
+                    self.reply({'source': 'sample', 'now': iso(t), 'events': events, 'calendars': CALENDARS,
+                                'shoppingOpen': len(shop), 'shoppingTop': shop[:3], 'quote': q,
+                                'weather': sample_weather(t), 'alerts': hub.alerts()})
+                elif path == '/api/calendar':
+                    start = datetime.fromisoformat(params['from'])
+                    if start.tzinfo is None:
+                        start = start.astimezone()
+                    days = max(1, min(42, int(params.get('days', '3'))))
+                    self.reply(hub.calendar(start, start + timedelta(days=days)))
+                elif path == '/api/shopping':
+                    self.reply(hub.shopping())
+                elif path == '/api/weather':
+                    self.reply(sample_weather(now()))
+                elif path == '/api/quotes':
+                    self.reply({'quotes': QUOTES, 'todayIndex': now().toordinal() % len(QUOTES)})
+                elif path == '/api/photos/manifest':
+                    self.reply({'source': 'sample', 'syncedAt': iso(now()), 'collections': ['All', 'Family', 'Trips', 'Seasonal'],
+                                'photos': [{'id': f'p{i:02d}', 'collections': ['All', ['Family', 'Trips', 'Seasonal'][i % 3]]}
+                                           for i in range(16)]})
+                elif re.fullmatch(r'/photos/p\d{2}\.svg', path):
+                    raw = photo_svg(int(path[9:11])).encode()
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'image/svg+xml')
+                    self.send_header('Content-Length', str(len(raw)))
+                    self.end_headers()
+                    self.wfile.write(raw)
+                elif path == '/api/home':
+                    self.reply({'source': 'sample', 'updatedAt': iso(now()), **hub.home, 'alerts': hub.alerts()})
+                elif path == '/api/settings':
+                    self.reply(hub.settings())
+                elif path == '/api/status':
+                    self.reply(hub.status())
+                elif path.startswith('/api/'):
+                    self.reply({'error': 'not found'}, 404)
+                else:
+                    super().do_GET()
+            except (KeyError, ValueError):
+                self.reply({'error': 'bad request'}, 400)
+
+        def do_POST(self):
+            if not self.allowed():
+                return
+            try:
+                body = self.body()
+                if self.path == '/api/shopping':
+                    name, qty, category, notes = clean_item(body)
+                    item = {'id': uuid.uuid4().hex[:12], 'name': name, 'qty': qty, 'category': category,
+                            'notes': notes, 'done': False, 'created': iso(now())}
+                    self.reply(hub.mutate_shopping(lambda items: items.append(item)))
+                elif self.path == '/api/shopping/clear':
+                    self.reply(hub.mutate_shopping(lambda items: items.__setitem__(slice(None), [i for i in items if not i['done']])))
+                elif self.path == '/api/home/action':
+                    time.sleep(0.25)  # sample adapter latency, so "Sending…" is visible
+                    self.reply(hub.home_action(body))
+                elif self.path == '/api/settings':
+                    current = hub.settings()
+                    for key, value in body.items():
+                        if key not in DEFAULT_SETTINGS or type(value) is not type(DEFAULT_SETTINGS[key]):
+                            raise ValueError('setting type')
+                        if key == 'units' and value not in ('F', 'C'):
+                            raise ValueError('units')
+                        if key in ('quietStart', 'quietEnd') and not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d', value):
+                            raise ValueError('quiet hours')
+                        current[key] = value
+                    current['idleMinutes'] = max(1, min(30, current['idleMinutes']))
+                    current['photoSeconds'] = max(10, min(300, current['photoSeconds']))
+                    current['returnTodayMinutes'] = max(1, min(30, current['returnTodayMinutes']))
+                    with LOCK:
+                        hub.store.write('settings', current)
+                    self.reply(current)
+                else:
+                    self.reply({'error': 'not found'}, 404)
+            except (KeyError, ValueError, json.JSONDecodeError):
+                self.reply({'error': 'bad request'}, 400)
+
+        def do_PATCH(self):
+            if not self.allowed():
+                return
+            try:
+                match = re.fullmatch(r'/api/shopping/([a-f0-9]{12})', self.path)
+                if not match:
+                    return self.reply({'error': 'not found'}, 404)
+                body = self.body()
+                def change(items):
+                    item = next(i for i in items if i['id'] == match.group(1))
+                    if 'done' in body:
+                        if type(body['done']) is not bool:
+                            raise ValueError('done')
+                        item['done'] = body['done']
+                self.reply(hub.mutate_shopping(change))
+            except (StopIteration, ValueError, json.JSONDecodeError):
+                self.reply({'error': 'bad request'}, 400)
+
+        def do_DELETE(self):
+            if not self.allowed():
+                return
+            match = re.fullmatch(r'/api/shopping/([a-f0-9]{12})', self.path)
+            if not match:
+                return self.reply({'error': 'not found'}, 404)
+            try:
+                self.body()
+                self.reply(hub.mutate_shopping(lambda items: items.__setitem__(
+                    slice(None), [i for i in items if i['id'] != match.group(1)])))
+            except ValueError:
+                self.reply({'error': 'bad request'}, 400)
+
+    return Handler
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--host', default='127.0.0.1')
+    parser.add_argument('--port', type=int, default=8099)
+    parser.add_argument('--allow', action='append', default=[], help='extra client address or CIDR (the frame)')
+    args = parser.parse_args()
+    allowed = [ipaddress.ip_network(a, strict=False) for a in args.allow]
+    hub = Hub(Store(DATA))
+    server = ThreadingHTTPServer((args.host, args.port), make_handler(hub, allowed))
+    extra = ''.join(', ' + str(address) for address in allowed)
+    print(f'Home Hub on http://{args.host}:{server.server_port} (allowed: loopback{extra})', flush=True)
+    server.serve_forever()
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smart Home</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div style="width: 1280px; height: 800px; display: flex; overflow: hidden; background: #FBFAF7; color: #1F2328; font-family: 'Atkinson Hyperlegible', system-ui, sans-serif">
+  <dc-import name="Sidebar" active="home" hint-size="180px,800px"></dc-import>
+  <main style="flex: 1; min-width: 0; box-sizing: border-box; padding: 22px 32px 20px; display: flex; flex-direction: column; gap: 14px; position: relative">
+    <div style="display: flex; align-items: baseline; gap: 18px">
+      <h1 style="margin: 0; font-size: 32px">Smart Home</h1>
+      <span style="font-size: 19px; color: #15603A; font-weight: 700">Home Assistant connected</span>
+    </div>
+
+    <div style="display: flex; gap: 12px; flex-wrap: wrap">
+      <div style="display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 18px; border-radius: 14px; background: #FFFFFF; border: 1px solid #E6E2D9; font-size: 19px"><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 999px; background: #15803D"></span><b>Front door</b> Closed</div>
+      <div style="display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 18px; border-radius: 14px; background: #FCE9D9; border: 1px solid #F2C7A5; font-size: 19px; color: #5C2805"><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 999px; background: #C2570C"></span><b>Back door</b> Open · 12 min</div>
+      <div style="display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 18px; border-radius: 14px; background: #FFFFFF; border: 1px solid #E6E2D9; font-size: 19px"><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 999px; background: #15803D"></span><b>Patio door</b> Closed</div>
+      <div style="display: flex; align-items: center; min-height: 52px; padding: 0 6px; font-size: 17px; color: #4A5058">Tapo H100 hub online</div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px">
+      <sc-for list="{{scenes}}" as="sc" hint-placeholder-count="3">
+        <button type="button" onClick="{{sc.run}}" style="min-height: 76px; border-radius: 18px; border: 0; background: {{sc.bg}}; color: {{sc.fg}}; font: inherit; font-size: 23px; font-weight: 700">{{sc.name}}</button>
+      </sc-for>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px">
+      <sc-for list="{{lights}}" as="l" hint-placeholder-count="4">
+        <button type="button" aria-pressed="{{l.pressed}}" onClick="{{l.toggle}}" style="min-height: 128px; box-sizing: border-box; padding: 16px 18px; border-radius: 18px; border: 2px solid {{l.border}}; background: {{l.bg}}; font: inherit; color: #1F2328; text-align: left; display: flex; flex-direction: column; justify-content: space-between; gap: 6px">
+          <span style="display: flex; align-items: center; justify-content: space-between; width: 100%">
+            <svg aria-hidden="true" width="30" height="30" viewBox="0 0 24 24" fill="{{l.bulbFill}}" stroke="#1F2328" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"></path><path d="M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.7 1 2.5h6c0-.8.2-1.7 1-2.5A6 6 0 0 0 12 3z"></path></svg>
+            <span style="font-size: 20px; font-weight: 700">{{l.state}}</span>
+          </span>
+          <span style="font-size: 21px; font-weight: 700">{{l.name}}</span>
+          <span style="font-size: 16px; color: #3A4048">{{l.detail}}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px">
+      <sc-for list="{{cams}}" as="c" hint-placeholder-count="2">
+        <div style="position: relative; border-radius: 18px; overflow: hidden; background: #3A4549; color: #FFFFFF; display: flex; flex-direction: column; justify-content: space-between; padding: 14px 16px">
+          <svg aria-hidden="true" width="100%" height="100%" viewBox="0 0 300 180" preserveAspectRatio="xMidYMid slice" style="position: absolute; inset: 0"><rect width="300" height="180" fill="#566469"></rect><path d="M0 130 L90 90 L170 120 L300 80 L300 180 L0 180 Z" fill="#3E4B50"></path><rect x="40" y="60" width="70" height="70" fill="#6B7A7F"></rect></svg>
+          <div style="position: relative; display: flex; justify-content: space-between; align-items: center">
+            <span style="padding: 4px 12px; border-radius: 999px; background: rgba(15, 20, 22, 0.7); font-size: 18px; font-weight: 700">{{c.name}}</span>
+            <span style="padding: 4px 10px; border-radius: 999px; background: rgba(15, 20, 22, 0.7); font-size: 16px">{{c.age}}</span>
+          </div>
+          <div style="position: relative; display: flex; justify-content: flex-end">
+            <button type="button" style="min-height: 52px; padding: 0 20px; border-radius: 12px; border: 0; background: #FFFFFF; color: #1F2328; font: inherit; font-size: 18px; font-weight: 700">View live</button>
+          </div>
+        </div>
+      </sc-for>
+      <div style="border-radius: 18px; border: 2px dashed #C9C4B8; background: #F3F1EC; display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 18px 20px">
+        <span style="font-size: 21px; font-weight: 700">Doorbell (D205)</span>
+        <span style="font-size: 18px; color: #3A4048">Pending verification: shown once the Home Assistant integration is confirmed.</span>
+      </div>
+    </div>
+
+    <sc-if value="{{toast}}" hint-placeholder-val="{{ false }}">
+      <div role="status" style="position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); display: flex; align-items: center; gap: 18px; min-height: 60px; padding: 0 12px 0 22px; border-radius: 16px; background: #1F2328; color: #FFFFFF; font-size: 20px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18)">
+        <span>{{toast}}</span>
+        <button type="button" onClick="{{undo}}" style="min-height: 48px; padding: 0 18px; border-radius: 10px; border: 0; background: #FFFFFF; color: #1F2328; font: inherit; font-size: 18px; font-weight: 700">Undo</button>
+      </div>
+    </sc-if>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { on: { living: true, kitchen: true, bedroom: false, twinkly: false }, toast: '' };
+  }
+  renderVals() {
+    const on = this.state.on;
+    const lights = [
+      ['living', 'Living room', 'Govee · 2 bulbs · 70%'],
+      ['kitchen', 'Kitchen', 'Govee · 3 bulbs · 100%'],
+      ['bedroom', 'Bedroom', 'Govee · 1 bulb'],
+      ['twinkly', 'Twinkly lights', 'Seasonal · Warm sparkle']
+    ].map(([id, name, detail]) => {
+      const lit = !!on[id];
+      return {
+        name, detail, state: lit ? 'On' : 'Off', pressed: lit ? 'true' : 'false',
+        bg: lit ? '#FFF6DE' : '#FFFFFF', border: lit ? '#E8C766' : '#E6E2D9', bulbFill: lit ? '#F2C94C' : 'none',
+        toggle: () => this.setState({ prev: on, on: { ...on, [id]: !lit }, toast: name + (lit ? ' off' : ' on') + ' · confirmed' })
+      };
+    });
+    const sceneSet = {
+      'Good Morning': { living: true, kitchen: true, bedroom: false, twinkly: false },
+      'Movie Night': { living: true, kitchen: false, bedroom: false, twinkly: true },
+      'All Off': { living: false, kitchen: false, bedroom: false, twinkly: false }
+    };
+    const scenes = Object.keys(sceneSet).map((name) => ({
+      name,
+      bg: name === 'All Off' ? '#1F2328' : '#1F5FD1', fg: '#FFFFFF',
+      run: () => this.setState({ prev: on, on: sceneSet[name], toast: name + ' · confirmed by Home Assistant' })
+    }));
+    return {
+      lights, scenes,
+      toast: this.state.toast,
+      undo: () => this.setState({ on: this.state.prev || on, toast: '' }),
+      cams: [
+        { name: 'Entryway · C110', age: 'Snapshot 20 s ago' },
+        { name: 'Backyard · C246D', age: 'Snapshot 40 s ago' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

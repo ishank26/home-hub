@@ -1,0 +1,16 @@
+data/
+__pycache__/
+*.py[cod]
+.~lock.*#
+node_modules/
+test-results/
+.ruff_cache/
+.pytest_cache/
+# Firmware, APK captures and device identifiers must never enter Git.
+backups/
+diagnostics/
+*.apk
+*.jks
+*.keystore
+*.img
+*.dump

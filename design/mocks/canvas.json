@@ -1,0 +1,26 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-10-12T04:05:00Z"},
+  "title": "Humblestead Home Hub",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {"x": 0, "y": 0, "w": 1280, "h": 2280, "title": "Revised requirements v1.1 (draft)"},
+    "Screensaver.dc.html": {"x": 1440, "y": 0, "w": 1280, "h": 800, "title": "1 · Photo screensaver"},
+    "Today.dc.html": {"x": 2800, "y": 0, "w": 1280, "h": 800, "title": "2 · Today", "is_interactive": true},
+    "Calendar.dc.html": {"x": 4160, "y": 0, "w": 1280, "h": 800, "title": "3 · Calendar (3-day)", "is_interactive": true},
+    "Shopping.dc.html": {"x": 1440, "y": 920, "w": 1280, "h": 800, "title": "4 · Shopping", "is_interactive": true},
+    "Weather.dc.html": {"x": 2800, "y": 920, "w": 1280, "h": 800, "title": "5 · Weather", "is_interactive": true},
+    "Quotes.dc.html": {"x": 4160, "y": 920, "w": 1280, "h": 800, "title": "6 · Quotes", "is_interactive": true},
+    "Photos.dc.html": {"x": 1440, "y": 1840, "w": 1280, "h": 800, "title": "7 · Photos", "is_interactive": true},
+    "SmartHome.dc.html": {"x": 2800, "y": 1840, "w": 1280, "h": 800, "title": "8 · Smart Home (your devices)", "is_interactive": true},
+    "Settings.dc.html": {"x": 4160, "y": 1840, "w": 1280, "h": 800, "title": "9 · Settings & sync status", "is_interactive": true},
+    "Night.dc.html": {"x": 1440, "y": 2760, "w": 1280, "h": 800, "title": "10 · Night mode (quiet hours)"},
+    "Sidebar.dc.html": {"x": 2800, "y": 2760, "w": 180, "h": 800, "title": "Shared sidebar component"}
+  },
+  "order": ["Main.dc.html", "Screensaver.dc.html", "Today.dc.html", "Calendar.dc.html", "Shopping.dc.html", "Weather.dc.html", "Quotes.dc.html", "Photos.dc.html", "SmartHome.dc.html", "Settings.dc.html", "Night.dc.html", "Sidebar.dc.html"],
+  "notes": {
+    "screens": {"x": 1440, "y": -300, "text": "Screens · 10.1\" frame · 1280×800", "kind": "title1", "maxW": 4000}
+  },
+  "designSystems": []
+}

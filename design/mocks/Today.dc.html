@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Today</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&amp;family=Fraunces:ital,opsz,wght@1,9..144,400&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}a{color:#1F5FD1}a:hover{color:#174AA6}</style>
+</helmet>
+<div style="width: 1280px; height: 800px; display: flex; overflow: hidden; background: #FBFAF7; color: #1F2328; font-family: 'Atkinson Hyperlegible', system-ui, sans-serif">
+  <dc-import name="Sidebar" active="today" hint-size="180px,800px"></dc-import>
+  <main style="flex: 1; min-width: 0; box-sizing: border-box; padding: 24px 32px; display: flex; flex-direction: column; gap: 18px">
+    <sc-if value="{{showAlert}}" hint-placeholder-val="{{ true }}">
+      <a href="SmartHome.dc.html" style="display: flex; align-items: center; gap: 14px; min-height: 56px; padding: 0 20px; border-radius: 14px; background: #FCE9D9; color: #5C2805; text-decoration: none; font-size: 20px">
+        <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V4a1 1 0 0 1 1-1h9v18"></path><path d="M14 4l6 2v15h-6"></path><path d="M10 12h.01"></path></svg>
+        <span style="flex: 1"><b>Back door is open</b> · 12 min</span>
+        <span style="font-weight: 700">View</span>
+      </a>
+    </sc-if>
+
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="font-size: 120px; font-weight: 700; line-height: 0.95; letter-spacing: -0.02em">7:42<span style="font-size: 36px; letter-spacing: 0; margin-left: 10px">AM</span></div>
+        <div style="font-size: 30px; color: #2F3640">Thursday, October 10</div>
+      </div>
+      <a href="Weather.dc.html" style="display: flex; align-items: center; gap: 20px; padding: 18px 24px; min-width: 360px; box-sizing: border-box; border-radius: 20px; background: #FFFFFF; border: 1px solid #E6E2D9; text-decoration: none; color: #1F2328">
+        <svg aria-hidden="true" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#C2570C" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+        <div style="display: flex; flex-direction: column; gap: 4px">
+          <div style="font-size: 52px; font-weight: 700; line-height: 1">62°</div>
+          <div style="font-size: 19px">Clear · H 72° L 54°</div>
+          <div style="font-size: 19px; font-weight: 700; color: #1E4E8C">Rain from 3 PM · 60%</div>
+        </div>
+      </a>
+    </div>
+
+    <div style="flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 20px">
+      <section style="background: #FFFFFF; border: 1px solid #E6E2D9; border-radius: 20px; padding: 20px 24px; display: flex; flex-direction: column; gap: 6px">
+        <div style="display: flex; align-items: center; justify-content: space-between">
+          <h2 style="margin: 0; font-size: 26px">Next up</h2>
+          <a href="Calendar.dc.html" style="display: flex; align-items: center; min-height: 48px; padding: 0 8px; font-size: 19px; font-weight: 700; text-decoration: none">Calendar ›</a>
+        </div>
+        <sc-for list="{{events}}" as="e" hint-placeholder-count="4">
+          <div style="display: flex; align-items: center; gap: 16px; min-height: 64px; border-top: 1px solid #EFECE5">
+            <span aria-hidden="true" style="width: 14px; height: 14px; border-radius: 999px; background: {{e.color}}; flex: none"></span>
+            <div style="width: 112px; flex: none; font-size: 21px; font-weight: 700">{{e.time}}</div>
+            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+              <span style="font-size: 23px">{{e.title}}</span>
+              <span style="font-size: 16px; color: #4A5058">{{e.cal}}</span>
+            </div>
+            <span style="padding: 6px 12px; border-radius: 999px; font-size: 16px; font-weight: 700; background: {{e.tagBg}}; color: {{e.tagFg}}">{{e.rel}}</span>
+          </div>
+        </sc-for>
+      </section>
+
+      <a href="Shopping.dc.html" style="background: #FFFFFF; border: 1px solid #E6E2D9; border-radius: 20px; padding: 20px 24px; display: flex; flex-direction: column; gap: 10px; text-decoration: none; color: #1F2328">
+        <div style="display: flex; align-items: baseline; justify-content: space-between">
+          <h2 style="margin: 0; font-size: 26px">Shopping</h2>
+          <span style="font-size: 19px; font-weight: 700; color: #1F5FD1">Open ›</span>
+        </div>
+        <div style="font-size: 44px; font-weight: 700; line-height: 1">8 <span style="font-size: 22px; font-weight: 400">open items</span></div>
+        <div style="display: flex; flex-direction: column">
+          <div style="display: flex; justify-content: space-between; min-height: 52px; align-items: center; border-top: 1px solid #EFECE5; font-size: 22px"><span>Milk</span><span style="color: #4A5058; font-size: 18px">1 gal</span></div>
+          <div style="display: flex; justify-content: space-between; min-height: 52px; align-items: center; border-top: 1px solid #EFECE5; font-size: 22px"><span>Eggs</span><span style="color: #4A5058; font-size: 18px">12</span></div>
+          <div style="display: flex; justify-content: space-between; min-height: 52px; align-items: center; border-top: 1px solid #EFECE5; font-size: 22px"><span>Coffee beans</span><span style="color: #4A5058; font-size: 18px">1 bag</span></div>
+        </div>
+        <div style="font-size: 18px; color: #4A5058">+ 5 more</div>
+      </a>
+    </div>
+
+    <a href="Quotes.dc.html" style="display: flex; align-items: center; justify-content: center; gap: 16px; min-height: 56px; text-decoration: none; color: #2F3640">
+      <span style="font-family: 'Fraunces', Georgia, serif; font-style: italic; font-size: 24px">“Well done is better than well said.”</span>
+      <span style="font-size: 18px; color: #4A5058">Benjamin Franklin</span>
+    </a>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"showAlert":{"editor":"boolean","default":true},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const cal = {
+      Work: '#C2570C', Family: '#2F6FD6', Sports: '#7A4CC2', School: '#0F7B6C'
+    };
+    const ev = (time, title, c, rel, soon) => ({
+      time, title, cal: c, color: cal[c], rel,
+      tagBg: soon ? '#1F5FD1' : '#EFECE5', tagFg: soon ? '#FFFFFF' : '#2F3640'
+    });
+    return {
+      showAlert: this.props.showAlert ?? true,
+      events: [
+        ev('8:00 AM', 'Team standup', 'Work', 'in 18 min', true),
+        ev('12:00 PM', 'Lunch with Sarah', 'Family', 'in 4 h', false),
+        ev('4:30 PM', 'Soccer practice', 'Sports', 'in 9 h', false),
+        ev('6:00 PM', 'Dinner at home', 'Family', 'in 10 h', false)
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

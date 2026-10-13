@@ -1,0 +1,3 @@
+# Preserve the original upstream OFL license text, including trailing spaces.
+static/fonts/Atkinson-OFL.txt whitespace=-blank-at-eol
+static/fonts/Fraunces-OFL.txt whitespace=-blank-at-eol

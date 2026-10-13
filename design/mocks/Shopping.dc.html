@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shopping</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}input[type=checkbox]{accent-color:#1F5FD1}</style>
+</helmet>
+<div style="width: 1280px; height: 800px; display: flex; overflow: hidden; background: #FBFAF7; color: #1F2328; font-family: 'Atkinson Hyperlegible', system-ui, sans-serif">
+  <dc-import name="Sidebar" active="shopping" hint-size="180px,800px"></dc-import>
+  <main style="flex: 1; min-width: 0; box-sizing: border-box; padding: 22px 32px 20px; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; align-items: center; gap: 16px">
+      <h1 style="margin: 0; font-size: 32px">Shopping</h1>
+      <span style="font-size: 20px; color: #2F3640; flex: 1">{{openCount}} open · <span style="color: #15603A; font-weight: 700">Synced 7:40</span></span>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 12px">
+      <label for="add-item" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Add an item</label>
+      <input id="add-item" type="text" placeholder="Add an item…" style="flex: 1; min-width: 0; height: 60px; box-sizing: border-box; padding: 0 20px; border-radius: 14px; border: 2px solid #C9C4B8; background: #FFFFFF; font: inherit; font-size: 22px; color: #1F2328">
+      <button type="button" style="height: 60px; padding: 0 26px; border-radius: 14px; border: 0; background: #1F5FD1; color: #FFFFFF; font: inherit; font-size: 21px; font-weight: 700">Add</button>
+    </div>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center">
+      <span style="font-size: 18px; color: #4A5058">Quick add</span>
+      <button type="button" style="min-height: 48px; padding: 0 16px; border-radius: 999px; border: 1px solid #DCD8CE; background: #FFFFFF; font: inherit; font-size: 18px; color: #1F2328">+ Bread</button>
+      <button type="button" style="min-height: 48px; padding: 0 16px; border-radius: 999px; border: 1px solid #DCD8CE; background: #FFFFFF; font: inherit; font-size: 18px; color: #1F2328">+ Yogurt</button>
+      <button type="button" style="min-height: 48px; padding: 0 16px; border-radius: 999px; border: 1px solid #DCD8CE; background: #FFFFFF; font: inherit; font-size: 18px; color: #1F2328">+ Apples</button>
+      <button type="button" style="min-height: 48px; padding: 0 16px; border-radius: 999px; border: 1px solid #DCD8CE; background: #FFFFFF; font: inherit; font-size: 18px; color: #1F2328">+ Dish soap</button>
+    </div>
+
+    <div style="flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-content: start">
+      <sc-for list="{{columns}}" as="col" hint-placeholder-count="2">
+        <div style="display: flex; flex-direction: column; gap: 14px">
+          <sc-for list="{{col.groups}}" as="g" hint-placeholder-count="2">
+            <section style="background: #FFFFFF; border: 1px solid #E6E2D9; border-radius: 18px; padding: 8px 20px 4px">
+              <h2 style="margin: 6px 0 2px; font-size: 18px; letter-spacing: 0.08em; text-transform: uppercase; color: #4A5058">{{g.name}}</h2>
+              <sc-for list="{{g.items}}" as="it" hint-placeholder-count="2">
+                <label style="display: flex; align-items: center; gap: 16px; min-height: 58px; border-top: 1px solid #EFECE5; cursor: pointer">
+                  <input type="checkbox" checked="{{it.done}}" onChange="{{it.toggle}}" style="width: 30px; height: 30px; margin: 0; flex: none">
+                  <span style="flex: 1; font-size: 22px">{{it.name}}</span>
+                  <span style="font-size: 18px; color: #4A5058">{{it.qty}}</span>
+                  <sc-if value="{{it.pending}}" hint-placeholder-val="{{ false }}">
+                    <span style="padding: 4px 10px; border-radius: 999px; background: #FCE9D9; color: #6A2E06; font-size: 16px; font-weight: 700">Saving…</span>
+                  </sc-if>
+                </label>
+              </sc-for>
+            </section>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 16px; min-height: 60px; padding: 0 20px; border-radius: 16px; background: #F1EFE9">
+      <span style="font-size: 20px; font-weight: 700">Completed ({{doneCount}})</span>
+      <span style="flex: 1; font-size: 19px; color: #4A5058; text-decoration: line-through">{{doneNames}}</span>
+      <button type="button" onClick="{{clear}}" style="min-height: 52px; padding: 0 20px; border-radius: 12px; border: 1px solid #C9C4B8; background: #FFFFFF; font: inherit; font-size: 18px; font-weight: 700; color: #1F2328">Clear completed</button>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { done: { Bread: true }, cleared: {} };
+  }
+  renderVals() {
+    const groups = [
+      ['Produce', [['Avocados', '3'], ['Bananas', '1 bunch'], ['Tomatoes', '4']]],
+      ['Dairy', [['Milk', '1 gal'], ['Eggs', '12']]],
+      ['Pantry', [['Coffee beans', '1 bag'], ['Pasta', '2 boxes'], ['Bread', '1 loaf']]],
+      ['Household', [['Paper towels', '6 rolls', true]]]
+    ];
+    const done = this.state.done, cleared = this.state.cleared;
+    const make = ([name, items]) => ({
+      name,
+      items: items.filter(([n]) => !done[n] && !cleared[n]).map(([n, qty, pending]) => ({
+        name: n, qty, pending: !!pending, done: false,
+        toggle: () => this.setState({ done: { ...done, [n]: true } })
+      }))
+    });
+    const all = groups.map(make).filter((g) => g.items.length);
+    const doneList = Object.keys(done).filter((n) => done[n] && !cleared[n]);
+    return {
+      columns: [{ groups: all.slice(0, 2) }, { groups: all.slice(2) }],
+      openCount: all.reduce((n, g) => n + g.items.length, 0),
+      doneCount: doneList.length,
+      doneNames: doneList.join(', ') || 'Nothing checked yet',
+      clear: () => {
+        const c = { ...cleared };
+        doneList.forEach((n) => { c[n] = true; });
+        this.setState({ cleared: c });
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

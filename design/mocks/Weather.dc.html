@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Weather</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div style="width: 1280px; height: 800px; display: flex; overflow: hidden; background: #FBFAF7; color: #1F2328; font-family: 'Atkinson Hyperlegible', system-ui, sans-serif">
+  <dc-import name="Sidebar" active="weather" hint-size="180px,800px"></dc-import>
+  <main style="flex: 1; min-width: 0; box-sizing: border-box; padding: 22px 32px 20px; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; align-items: baseline; gap: 18px">
+      <h1 style="margin: 0; font-size: 32px">Weather</h1>
+      <span style="font-size: 20px; color: #2F3640; flex: 1">[Home location]</span>
+      <span style="font-size: 17px; color: #4A5058">Observed 7:35 AM · Forecast 7:30 AM · [Provider]</span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 18px">
+      <section style="background: #FFFFFF; border: 1px solid #E6E2D9; border-radius: 20px; padding: 22px 26px; display: flex; align-items: center; gap: 22px">
+        <svg aria-hidden="true" width="96" height="96" viewBox="0 0 24 24" fill="none" stroke="#C2570C" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+        <div style="display: flex; flex-direction: column; gap: 4px">
+          <div style="font-size: 16px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #4A5058">Now · observed</div>
+          <div style="font-size: 96px; font-weight: 700; line-height: 0.95">62°</div>
+          <div style="font-size: 22px">Clear · feels like 60°</div>
+          <div style="font-size: 20px; color: #2F3640">Today H 72° · L 54°</div>
+        </div>
+      </section>
+      <section style="background: #FFFFFF; border: 1px solid #E6E2D9; border-radius: 20px; padding: 18px 24px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 20px; align-content: center">
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 17px; color: #4A5058">Rain today</span><span style="font-size: 30px; font-weight: 700; color: #1E4E8C">60% · 3 PM</span></div>
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 17px; color: #4A5058">Wind</span><span style="font-size: 30px; font-weight: 700">5 mph</span></div>
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 17px; color: #4A5058">Humidity</span><span style="font-size: 30px; font-weight: 700">48%</span></div>
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 17px; color: #4A5058">UV index</span><span style="font-size: 30px; font-weight: 700">2 Low</span></div>
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 17px; color: #4A5058">Sunrise</span><span style="font-size: 30px; font-weight: 700">7:18 AM</span></div>
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 17px; color: #4A5058">Sunset</span><span style="font-size: 30px; font-weight: 700">6:32 PM</span></div>
+      </section>
+    </div>
+
+    <section style="background: #FFFFFF; border: 1px solid #E6E2D9; border-radius: 20px; padding: 14px 20px; display: flex; flex-direction: column; gap: 6px">
+      <h2 style="margin: 0; font-size: 20px">Next hours</h2>
+      <div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px">
+        <sc-for list="{{hours}}" as="h" hint-placeholder-count="8">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0; border-radius: 12px; background: {{h.bg}}">
+            <span style="font-size: 17px; font-weight: 700; color: #2F3640">{{h.t}}</span>
+            <sc-if value="{{h.sun}}" hint-placeholder-val="{{ true }}"><svg aria-hidden="true" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#C2570C" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"></path></svg></sc-if>
+            <sc-if value="{{h.cloud}}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#4A5058" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18h10a4 4 0 0 0 0-8 6 6 0 0 0-11.5 1.5A3.3 3.3 0 0 0 7 18z"></path></svg></sc-if>
+            <sc-if value="{{h.rain}}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#1E4E8C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 15h10a4 4 0 0 0 0-8 6 6 0 0 0-11.5 1.5A3.3 3.3 0 0 0 7 15z"></path><path d="M9 18l-1 3M13 18l-1 3M17 18l-1 3"></path></svg></sc-if>
+            <span style="font-size: 24px; font-weight: 700">{{h.temp}}°</span>
+            <span style="font-size: 16px; font-weight: 700; color: #1E4E8C">{{h.pop}}%</span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <section style="flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px">
+      <sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+        <div style="background: {{d.bg}}; border: 1px solid {{d.border}}; border-radius: 18px; padding: 12px 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px">
+          <span style="font-size: 20px; font-weight: 700">{{d.day}}</span>
+          <sc-if value="{{d.sun}}" hint-placeholder-val="{{ true }}"><svg aria-hidden="true" width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#C2570C" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"></path></svg></sc-if>
+          <sc-if value="{{d.cloud}}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#4A5058" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18h10a4 4 0 0 0 0-8 6 6 0 0 0-11.5 1.5A3.3 3.3 0 0 0 7 18z"></path></svg></sc-if>
+          <sc-if value="{{d.rain}}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#1E4E8C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 15h10a4 4 0 0 0 0-8 6 6 0 0 0-11.5 1.5A3.3 3.3 0 0 0 7 15z"></path><path d="M9 18l-1 3M13 18l-1 3M17 18l-1 3"></path></svg></sc-if>
+          <span style="font-size: 16px; color: #2F3640">{{d.cond}}</span>
+          <span style="font-size: 26px; font-weight: 700">{{d.hi}}° <span style="font-weight: 400; color: #4A5058">{{d.lo}}°</span></span>
+          <span style="font-size: 17px; font-weight: 700; color: #1E4E8C">{{d.pop}}% rain</span>
+        </div>
+      </sc-for>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const k = (kind) => ({ sun: kind === 'sun', cloud: kind === 'cloud', rain: kind === 'rain' });
+    const hours = [
+      ['Now', 62, 0, 'sun'], ['9 AM', 64, 0, 'sun'], ['10 AM', 66, 5, 'sun'], ['11 AM', 68, 10, 'sun'],
+      ['12 PM', 70, 20, 'cloud'], ['1 PM', 71, 30, 'cloud'], ['2 PM', 70, 45, 'cloud'], ['3 PM', 66, 60, 'rain']
+    ].map(([t, temp, pop, kind]) => ({ t, temp, pop, ...k(kind), bg: pop >= 50 ? '#E6EEF9' : 'transparent' }));
+    const days = [
+      ['Today', 72, 54, 60, 'rain', 'Rain later'], ['Fri', 68, 52, 20, 'cloud', 'Cloudy'], ['Sat', 65, 50, 70, 'rain', 'Showers'],
+      ['Sun', 66, 51, 30, 'cloud', 'Mostly cloudy'], ['Mon', 70, 53, 0, 'sun', 'Sunny'], ['Tue', 71, 55, 5, 'sun', 'Sunny'], ['Wed', 69, 54, 15, 'cloud', 'Cloudy']
+    ].map(([day, hi, lo, pop, kind, cond], i) => ({
+      day, hi, lo, pop, cond, ...k(kind),
+      bg: i === 0 ? '#F4F7FD' : '#FFFFFF', border: i === 0 ? '#B9CCF0' : '#E6E2D9'
+    }));
+    return { hours, days };
+  }
+}
+</script>
+</body>
+</html>
