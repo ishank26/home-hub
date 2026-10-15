@@ -8,20 +8,28 @@ Assessment: 2026-10-12. **Planning only; no frame writes or deployment performed
 |---|---|
 | Host | Debian/Linux, existing dashboard checkout available |
 | ADB | Installed, version 34.0.5; `adb devices -l` lists no devices |
-| USB | No Allwinner `1f3a` device or Rockchip `2207` device in current `lsusb` output |
+| USB | 2026-10-14: `1f3a:1000` "Android", Mass Storage interface only, no ADB (`diagnose-frame.py`: `usb-without-adb`). Connected through a USB 2.0 hub |
 | Recent USB kernel events | No relevant events visible in the accessible last-20-minute journal; an additional 30-second udev USB monitor saw no connection events. Limited journal visibility is not proof of absence |
 | Network identity | No positively identified frame IP; mDNS candidate `Android.local` advertises a TV/AirPlay service, not a verified frame. No ADB connection attempted to it. Neighbor-cache entries alone do not identify the frame |
-| Model / firmware | Unknown; owner must read Settings → About |
+| Model / firmware | 2026-10-14, owner About screen: PF1007L, `…A33-1001-D1024-PF1007L-321-OS-AIMOR.0.20260410`, AiMOR 6.0.78. Exactly matches upstream's tested April units (T3c, one-sector edit, Route U) |
 | Ports / cable / power | Unknown; owner physical check needed |
-| Android / ABI / WebView / RAM | Unknown; read after ADB works |
-| Backup | No verified frame backup established |
+| Android / ABI / WebView / RAM | 2026-10-14, via temporary root network ADB (upstream T3c on an isolated laptop-hosted Wi-Fi; web-only egress, vendor 7806 redirected to the laptop): `sun8i`, Android 6.0.1 / API 23, `armeabi-v7a`, build `…MOB30R 20260410`, 1280×800 @ 160 dpi, stock WebView **44.0.2403.119** (no Google WebView), ~1 GB RAM + 256 MiB zRAM swap, eMMC 30,777,344 sectors, `/system` 1008 MB (396 MB free), `ro.adb.secure=0`, `persist.sys.usb.config=mass_storage` with no `/data/property` override |
+| Backup | 2026-10-14: **partial** capture only, from stock recovery's root-ADB window during an owner-approved AiMOR factory reset (user data wiped). Pulled boot, env, misc, recovery (private 0700 directory outside Git; bootloader missed when the window closed). Boot image SHA-256 over 31,028 sectors = `8ffc2a7d…`, matching upstream's tested April units. Not a full-device backup |
 | Router protection | Outbound TCP 7806 block not verified; no Wi-Fi enrollment or network ADB attempted |
 | Dashboard | Sample-data prototype passes backend and desktop Chromium tests; actual frame engine untested |
 | Host dashboard listener | Nothing listening on 8099 at this assessment |
 | APK build tools | No Java/Javac, Android platform/build-tools, aapt, zipalign or apksigner found through the inspected PATH/directories; platform-tools available |
 | Host backup space | More than 700 GiB available on the internal home filesystem at assessment; no external backup disk used |
 
-**Current gate:** device identity and physical USB connection, not dashboard installation.
+**Current state (2026-10-14):** persistent **root USB ADB** works (`1f3a:1001`, `adb -d`). Done by one owner-approved write over temporary T3c network ADB: `persist.sys.usb.config=adb` in `/data/property` (undo: set it back to `mass_storage`, or an AiMOR factory reset clears it). Verified across a reboot; network ADB 5555 closed after reboot. The owner **declined a full backup**; only the partial recovery-window capture exists.
+
+**WebView (2026-10-14, owner-approved, no full backup):** replaced stock 44.0.2403.119 with **106.0.5249.126** (LineageOS `android_external_chromium-webview_prebuilt_arm@4b0ae494a7dd`, APK SHA-256 `e2edc1f8…0980580`), with `lib/arm/*.so` extracted per upstream §6; every staged and live file verified by readback. Original tree (APK + odex) preserved at `/system/homehq-stock-webview`. After reboot Package Manager reports 106 from `/system/app/webview`, no `dlopen` errors, and HTMLViewer renders HTML (its JavaScript is disabled, so JS/ES2020 is unverified until the kiosk). `/system` remounted read-only; 288 MB free.
+
+Undo: remount `/system` rw, `mv /system/app/webview /system/homehq-new-webview`, `mv /system/homehq-stock-webview /system/app/webview`, sync, remount ro, reboot.
+
+**Kiosk (2026-10-14):** `kiosk/` builds a 12.6 KB fullscreen WebView app (`com.homehub.kiosk`, INTERNET permission only) with Debian `openjdk-21-jdk-headless`, `aapt`, `zipalign`, `apksigner`, `android-framework-res` and pinned d8 8.5.35; signing key in `~/.config/home-hub/` (outside Git). Installed as a normal app (`adb -d uninstall com.homehub.kiosk` removes it). With `server.py` on loopback and `adb -d reverse tcp:8099 tcp:8099`, the Today view renders fullscreen at 1280×800 on the frame; no JavaScript errors in logcat (only benign `eglChooseConfig` probe messages); ~63 MB PSS. Exit: three-finger hold for 2 s. AiMOR is still the Home launcher; the reverse mapping does not survive a reboot or ADB restart.
+
+**Current gate:** owner acceptance on the device (every tab, touch, idle/screensaver/night), then the permanent setup: Home launcher/autostart with a fallback, and how the frame reaches the server without USB (LAN needs the vendor 7806 block or AiMOR disabled first).
 Brand/listing is not proof of the board or firmware.
 
 ## 1. Owner physical checks, then read-only discovery

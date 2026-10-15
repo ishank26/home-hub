@@ -14,3 +14,4 @@ diagnostics/
 *.keystore
 *.img
 *.dump
+kiosk/build/
