@@ -18,4 +18,5 @@ public class Activity extends Context {
     public Intent getIntent() { throw new RuntimeException(); }
     public void setContentView(View view) { throw new RuntimeException(); }
     public void finish() { throw new RuntimeException(); }
+    public void startActivity(Intent intent) { throw new RuntimeException(); }
 }

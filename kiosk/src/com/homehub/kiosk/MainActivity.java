@@ -1,6 +1,7 @@
 package com.homehub.kiosk;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.view.MotionEvent;
@@ -12,7 +13,8 @@ import android.webkit.WebViewClient;
 /**
  * Fullscreen dashboard kiosk. Loads the Home Hub page, keeps the screen on, hides system bars,
  * and retries every few seconds while the server is unreachable. A three-finger hold for two
- * seconds exits (the dashboard itself uses a two-finger hold for its admin panel).
+ * seconds opens Android Settings, where Settings > Home switches back to the stock launcher
+ * (the dashboard itself uses a two-finger hold for its admin panel).
  *
  * Optional: `am start -n com.homehub.kiosk/.MainActivity --es url http://127.0.0.1:8100/`.
  */
@@ -31,6 +33,7 @@ public class MainActivity extends Activity {
             | 0x00000200 // SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
             | 0x00000400 // SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
             | 0x00001000; // SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+    private static final int FLAG_ACTIVITY_NEW_TASK = 0x10000000;
     private static final int ACTION_UP = 1;
     private static final int ACTION_CANCEL = 3;
     private static final int ACTION_POINTER_DOWN = 5;
@@ -52,7 +55,11 @@ public class MainActivity extends Activity {
     private final Runnable exit = new Runnable() {
         @Override
         public void run() {
-            finish();
+            try {
+                startActivity(new Intent("android.settings.SETTINGS").addFlags(FLAG_ACTIVITY_NEW_TASK));
+            } catch (RuntimeException e) {
+                finish();
+            }
         }
     };
 

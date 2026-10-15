@@ -1,0 +1,16 @@
+#!/bin/bash
+# Keep the frame's localhost:8099 mapped to this host's Home Hub server over USB ADB.
+# `adb reverse` mappings are lost whenever the frame reboots, is replugged or ADB restarts,
+# so re-create the mapping whenever it is missing. Selects the single USB device (`adb -d`);
+# never touches network ADB targets. Stop with Ctrl-C.
+set -u
+PORT="${HOME_HUB_PORT:-8099}"
+while true; do
+    adb -d wait-for-usb-device 2>/dev/null || { sleep 5; continue; }
+    if ! adb -d reverse --list 2>/dev/null | grep -q "tcp:$PORT tcp:$PORT"; then
+        if adb -d reverse "tcp:$PORT" "tcp:$PORT" >/dev/null 2>&1; then
+            echo "$(date '+%F %T') frame localhost:$PORT -> host localhost:$PORT"
+        fi
+    fi
+    sleep 5
+done

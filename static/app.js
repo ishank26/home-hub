@@ -1116,6 +1116,7 @@
     state.commonBusy = true;
     const gen = state.generation;
     try {
+      if (!state.settingsLoaded) await loadSettings();
       const results = await Promise.allSettled([
         request("/api/today"),
         request("/api/status"),
@@ -1473,16 +1474,25 @@
   window.addEventListener("error", () => {
     state.lastError = "Browser script error";
   });
-  async function start() {
+  async function loadSettings() {
     try {
       const r = await request("/api/settings");
       state.settings = r.data;
+      state.settingsLoaded = !r.stale;
     } catch {
-      /* safe defaults */
+      /* safe defaults until the server answers */
     }
+  }
+  async function start() {
+    await loadSettings();
     await navigate("today");
     refreshCommon();
     setInterval(() => refreshCommon(true), 60000);
+    // After a cold start without the server (e.g. the frame booted first), retry
+    // sooner than the regular poll until settings and Today data have arrived.
+    setInterval(() => {
+      if (!state.settingsLoaded || !state.today) refreshCommon(true);
+    }, 10000);
     setInterval(idleCheck, 1000);
   }
   start();

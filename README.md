@@ -121,10 +121,23 @@ Next software phase: server-side adapters with explicit owner choices for calend
 weather/location and entity allowlists; HA to-do with an offline queue. Shopping
 currently uses a local store, not that HA queue. Aura sync is a later separate worker.
 
-ADB is installed, but USB detection and `adb devices -l` currently find no frame.
-Use the handoff's USB-A-to-USB-C **data** cable guidance. Do not enable frame Wi-Fi
-before outbound TCP 7806 is blocked. No frame writes without owner approval and a
-verified backup; stop at the first failed hardware check.
+## Frame kiosk (USB)
+
+The frame (PF1007L, April firmware) now has persistent root USB ADB, WebView 106 and
+the `kiosk/` app as its Home launcher; see [`FRAME_INSTALL_PLAN.md`](FRAME_INSTALL_PLAN.md)
+for what was changed and how to undo each step. To show the dashboard over USB:
+
+```sh
+python3 server.py                 # loopback only
+scripts/frame-usb-link            # keeps the frame's localhost:8099 mapped to this host
+```
+
+Rebuild/redeploy the app with `kiosk/build.sh` and `adb -d install -r kiosk/build/home-hub-kiosk.apk`
+(the signing key in `~/.config/home-hub/` must be kept for updates). A three-finger hold
+for 2 s opens Android Settings; Settings → Home switches back to AiMOR.
+
+Do not enable frame Wi-Fi on a normal network: AiMOR's vendor root shell (TCP 7806)
+is still installed. Network serving needs that blocked or AiMOR disabled first.
 
 Default binding is loopback. LAN deployment with `--allow` is **not authentication**;
 keep the frame isolated and the port firewalled, and use a device token if sharing
