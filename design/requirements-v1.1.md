@@ -92,8 +92,12 @@ family, running a custom web UI on an older Android WebView. Data and credential
 - Shopping uses a Home Assistant to-do list as its source, so the family can also edit it from the HA phone app.
 
 ## Still open
-- Calendar source: direct server-side Google sync, or HA calendar entities?
+- Calendar source resolved 2026-10-15: owner selected iCloud through HA CalDAV;
+  HA authentication is complete; dashboard access is deferred pending its HA credential.
 - The door-alert threshold [N] min, and which doors trigger it.
 - Calendar names and colors for each family member.
 - Home location, units and quote categories.
-- The exact frame model and WebView version (Phase 0).
+- Frame identity resolved: PF1007L April 20260410 firmware, WebView 106.
+- Photos selected 2026-10-15: mirror one existing Aura frame, with iPhone uploads
+  through the official Aura app. The read-only mirror is implemented; local Aura
+  authentication and first live sync remain pending.

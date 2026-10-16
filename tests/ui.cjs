@@ -51,7 +51,11 @@ const { chromium } = require("playwright");
     await context.request.post(base + "/api/settings", {
       data: { quietStart: "00:00", quietEnd: "00:00" },
     });
-    await page.clock.install({ time: new Date(2026, 9, 12, 12, 0) });
+    // Sample events are anchored to the backend's current day. Keep browser
+    // dates aligned while fixing the clock to noon for deterministic idle tests.
+    const uiNow = new Date();
+    uiNow.setHours(12, 0, 0, 0);
+    await page.clock.install({ time: uiNow });
     await page.goto(base);
     await page.locator(".clock-big").waitFor();
     await page.evaluate(() => document.fonts.ready);

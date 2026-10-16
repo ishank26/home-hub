@@ -1,0 +1,9 @@
+{
+  "network": {"host": "192.0.2.10", "allow": ["192.0.2.20/32"]},
+  "homeassistant": {
+    "url": "http://127.0.0.1:8123",
+    "calendars": [],
+    "lights": [],
+    "contacts": []
+  }
+}

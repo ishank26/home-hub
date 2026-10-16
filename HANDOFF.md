@@ -1,6 +1,6 @@
 # Humblestead Home Hub: developer handoff
 
-Updated 2026-10-12. Kitchen wall dashboard for a 10.1-inch Humblestead photo frame
+Updated 2026-10-15. Kitchen wall dashboard for a 10.1-inch Humblestead photo frame
 (1280 × 800 landscape, older Android, WebView around 106, roughly 1 GB RAM), used by the
 whole family. The frame shows the UI; this home server (`maxcaddy`) runs the backend and
 holds every credential.
@@ -19,6 +19,21 @@ holds every credential.
 | Server context | `/home/ishank/work/home-server/MEMORY.md`, `/home/ishank/work/maxcaddy/AGENTS.md`: Home Assistant runs on a private bridge with a loopback UI. Camera, person, audio and location data must never enter the Hermes assistant. |
 
 ## Current state (verified 2026-10-12)
+
+**2026-10-15 update (supersedes the historical table below):** the PF1007L April
+frame has working USB ADB, WebView 106 and kiosk v0.4. The owner selected Wi-Fi
+and iCloud calendar. A reviewed systemd user service is enabled/running, bound to
+the server LAN address with exact frame-IP plus device-cookie admission. Frame
+authenticated Wi-Fi API checks pass; USB dashboard forwarding is removed. HA
+remains loopback-only. The server-side HA adapter for selected calendars/lights/
+contacts is implemented and tested; actual HA token/entities and photos remain
+unconfigured for the dashboard. iCloud CalDAV authentication now succeeds in HA
+with the corrected Apple email and owner-generated app-specific password; three
+calendars and one to-do entity were discovered. Home and Me and bubs are selected and saved privately; Work excluded.
+A dedicated non-admin HA credential remains. The owner deferred account creation;
+the prepared user form was closed without creating an account. See
+[`INTEGRATIONS.md`](INTEGRATIONS.md) for current state and exact resume steps.
+Host/frame reboot, stable DHCP reservations and real-source acceptance remain.
 
 | Piece | State |
 |---|---|
@@ -221,9 +236,31 @@ Exit: every shown device returns a confirmed state; unsupported devices are hidd
 
 ## Open decisions (owner)
 
-1. Calendar source: direct Google sync, or Home Assistant calendar entities?
+1. Calendar source: **selected iCloud through HA CalDAV**; HA authentication complete; dashboard access pending.
 2. Door-contact alert threshold, and which doors.
 3. Calendar names and colors per family member.
 4. Home location, units and quote categories.
 5. Weather provider.
-6. The exact frame model and firmware (Phase 0).
+6. Frame identity resolved: PF1007L, April 20260410 firmware, WebView 106; see installation record.
+7. Photos: Aura mirror selected and implemented; local login and source-frame selection pending.
+
+
+## 2026-10-15 — Aura implementation, HA account step deferred
+
+Owner asked to skip the pending Home Hub HA user creation and implement Aura via
+protocol reverse engineering. No HA user/password was created by this phase.
+Read-only Aura login/frame listing/paginated assets/image proxy client and separate
+sync worker now implemented, with transactional EXIF-free resized JPEG/thumb cache,
+bounded resources, failed-attempt rollback and stale states. Source was inspected
+only, never imported/executed. See `docs/aura-protocol.md`. Dedicated pinned Pillow
+venv/unit/timer installed; timer disabled because no owner Aura session exists.
+`home-hub.service` restarted healthy, enabled/NRestarts0, Aura config still off.
+44 backend/image/HTTP tests, existing UI suite and synthetic Aura UI suite pass.
+Independent Sol/medium review closed cache-growth/status-shape/slideshow findings.
+
+Next owner-local action is `scripts/aura-setup`: existing Aura login and explicit
+source frame selection. It enables polling only after first complete sync. No
+personal photos downloaded, no Aura cloud writes or live acceptance. iPhone →
+official Aura app → selected Aura frame → Home Hub is the implemented route.
+Calendar remains authenticated in HA but not yet on the frame; owner-selected
+family calendar IDs stay in private config.

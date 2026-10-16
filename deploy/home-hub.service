@@ -1,0 +1,25 @@
+[Unit]
+Description=Humblestead Home Hub dashboard
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=%h/work/home-hub
+ExecStart=/usr/bin/python3 -B %h/work/home-hub/server.py --config %h/.config/home-hub/config.json
+Environment=HOME_HUB_DATA=%h/.local/share/home-hub/data
+Environment=TZ=America/New_York
+Restart=on-failure
+RestartSec=10
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=%h/.local/share/home-hub/data
+ReadOnlyPaths=%h/.config/home-hub
+PrivateTmp=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=128M
+TasksMax=32
+
+[Install]
+WantedBy=default.target

@@ -2,6 +2,7 @@ package com.homehub.kiosk;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.view.MotionEvent;
@@ -16,7 +17,9 @@ import android.webkit.WebViewClient;
  * seconds opens Android Settings, where Settings > Home switches back to the stock launcher
  * (the dashboard itself uses a two-finger hold for its admin panel).
  *
- * Optional: `am start -n com.homehub.kiosk/.MainActivity --es url http://127.0.0.1:8100/`.
+ * Server address: `am start -n com.homehub.kiosk/.MainActivity --es url <http(s) URL>` saves the
+ * URL (for the LAN, the server's /pair?token=... link) and every later launch, including boot as
+ * the Home app, reuses it. Without a saved URL it loads the USB address below.
  */
 public class MainActivity extends Activity {
     private static final String DEFAULT_URL = "http://127.0.0.1:8099/";
@@ -68,10 +71,11 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         getWindow().addFlags(FLAG_KEEP_SCREEN_ON | FLAG_FULLSCREEN);
 
-        String requested = getIntent().getStringExtra("url");
-        if (requested != null && (requested.startsWith("http://") || requested.startsWith("https://"))) {
-            url = requested;
+        String saved = getSharedPreferences("kiosk", 0).getString("url", null); // MODE_PRIVATE
+        if (isWebUrl(saved)) {
+            url = saved;
         }
+        saveRequestedUrl(getIntent());
 
         WebView.setWebContentsDebuggingEnabled(true); // reachable only over ADB
         web = new WebView(this);
@@ -102,6 +106,25 @@ public class MainActivity extends Activity {
         });
         setContentView(web);
         web.loadUrl(url);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        // As the Home app the kiosk is usually already running; a new URL arrives here.
+        super.onNewIntent(intent);
+        if (saveRequestedUrl(intent)) {
+            web.loadUrl(url);
+        }
+    }
+
+    private boolean saveRequestedUrl(Intent intent) {
+        String requested = intent.getStringExtra("url");
+        if (!isWebUrl(requested)) {
+            return false;
+        }
+        getSharedPreferences("kiosk", 0).edit().putString("url", requested).apply();
+        url = requested;
+        return true;
     }
 
     @Override
@@ -150,6 +173,10 @@ public class MainActivity extends Activity {
         if (web.canGoBack()) {
             web.goBack();
         }
+    }
+
+    private static boolean isWebUrl(String value) {
+        return value != null && (value.startsWith("http://") || value.startsWith("https://"));
     }
 
     private void hideSystemBars() {

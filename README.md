@@ -3,10 +3,16 @@
 A no-build, local kitchen dashboard for a 1280 × 800 landscape photo frame.
 The backend uses Python's standard library; the frontend is plain JavaScript.
 
-**Prototype status:** all eight views and the idle/screensaver/night modes work
-against the provided sample APIs. Shopping and settings persist locally. Calendar,
-weather, photos and smart-home devices are **samples**, not connected integrations.
-No credentials or frame software have been configured.
+All eight views and the idle/screensaver/night modes work. Shopping and settings
+persist locally. The default demo uses sample calendar/weather/photos/devices;
+the deployed integration configuration shows empty calendars/devices until setup.
+The dashboard still needs its dedicated Home Assistant credential and live device setup.
+
+**2026-10-15 deployment update:** the frame now has WebView 106 and the kiosk,
+and the dashboard runs as an enabled user service over Wi-Fi with frame-IP and
+device-cookie checks. The iCloud/HA adapter is implemented, iCloud is authenticated in HA, and two
+family calendars are selected. Dashboard access is deferred pending its HA credential. See
+[`INTEGRATIONS.md`](INTEGRATIONS.md) for setup and verified limitations.
 
 ## Run
 
@@ -117,9 +123,9 @@ Before committing, stage the intended files and run
 symlinks and unknown binaries; only the three hash-verified, licensed font files
 are explicitly allowed. It supplements manual review, not a secrecy guarantee.
 
-Next software phase: server-side adapters with explicit owner choices for calendar,
-weather/location and entity allowlists; HA to-do with an offline queue. Shopping
-currently uses a local store, not that HA queue. Aura sync is a later separate worker.
+Next setup steps: authenticate the Aura mirror, connect the dashboard to HA, and
+select weather/location and device allowlists. HA to-do with an offline queue is
+still planned; shopping currently uses a local store.
 
 ## Frame kiosk (USB)
 
@@ -136,9 +142,30 @@ Rebuild/redeploy the app with `kiosk/build.sh` and `adb -d install -r kiosk/buil
 (the signing key in `~/.config/home-hub/` must be kept for updates). A three-finger hold
 for 2 s opens Android Settings; Settings → Home switches back to AiMOR.
 
-Do not enable frame Wi-Fi on a normal network: AiMOR's vendor root shell (TCP 7806)
-is still installed. Network serving needs that blocked or AiMOR disabled first.
+AiMOR and the vendor updater/test packages are disabled on the deployed frame.
+Keep those packages disabled and preserve the network restrictions when using Wi-Fi.
 
 Default binding is loopback. LAN deployment with `--allow` is **not authentication**;
 keep the frame isolated and the port firewalled, and use a device token if sharing
 the network. Do not expose this prototype to the Internet.
+
+## Aura photos
+
+Read-only Aura photo mirroring is implemented. Its separate worker caches resized,
+metadata-free JPEGs and thumbnails; Photos and the screensaver use those local
+copies. The original Aura frame and cloud library are not changed. To connect:
+
+```sh
+scripts/install-aura-runtime  # already installed on this host
+scripts/aura-setup            # existing Aura login + source frame selection
+```
+
+The helper hides password input, saves only a private session token, performs the
+first sync and then enables fifteen-minute refreshes. No personal Aura account is
+connected yet. Add iPhone photos with the official Aura app to the selected frame
+and the mirror picks them up after sync. [Protocol and operation](docs/aura-protocol.md).
+
+Full backend/image tests: `~/.local/share/home-hub/aura-venv/bin/python -m unittest discover -s tests -v`.
+The normal stdlib-only test run skips the five Pillow-dependent test methods when
+Pillow is absent; the dedicated-runtime verification ran all 44 tests with no skips.
+Photo browser flow: `NODE_PATH=/tmp/home-hub-browser/node_modules node tests/ui-aura.cjs`.

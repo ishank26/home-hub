@@ -1,6 +1,7 @@
 # Frame assessment and installation plan
 
-Assessment: 2026-10-12. **Planning only; no frame writes or deployment performed.**
+Initial assessment: 2026-10-12. Installation and Wi-Fi updates below supersede
+the historical assessment table and original planning gates.
 
 ## Observed versus unknown
 
@@ -29,7 +30,14 @@ Undo: remount `/system` rw, `mv /system/app/webview /system/homehq-new-webview`,
 
 **Kiosk (2026-10-14):** `kiosk/` builds a 12.6 KB fullscreen WebView app (`com.homehub.kiosk`, INTERNET permission only) with Debian `openjdk-21-jdk-headless`, `aapt`, `zipalign`, `apksigner`, `android-framework-res` and pinned d8 8.5.35; signing key in `~/.config/home-hub/` (outside Git). Installed as a normal app (`adb -d uninstall com.homehub.kiosk` removes it). With `server.py` on loopback and `adb -d reverse tcp:8099 tcp:8099`, the Today view renders fullscreen at 1280×800 on the frame; no JavaScript errors in logcat (only benign `eglChooseConfig` probe messages); ~63 MB PSS. Exit: three-finger hold for 2 s. **Home launcher (2026-10-14, kiosk v0.2):** the kiosk also declares HOME and was chosen as the preferred Home app ("Always" in the system chooser); AiMOR stays installed. Verified: after reboot the kiosk starts by itself. A three-finger hold opens Android Settings (Settings → Home switches back to AiMOR). `scripts/frame-usb-link` re-creates the `adb reverse` mapping after reboots/replugs (verified). All eight tabs render on the device. Dashboard fix: after a cold start without the server it now retries every 10 s and reloads settings (was: 60 s, and settings stayed at defaults); verified on the frame (recovered 11 s after the link returned).
 
-**Current gate:** owner decision on the permanent link: keep the frame USB-tethered to this host (run `server.py` and `scripts/frame-usb-link` as services), or serve over the LAN (needs the vendor 7806 block or AiMOR disabled, plus frame-IP allowlisting).
+**2026-10-15 Wi-Fi update:** owner selected Wi-Fi. Verified frame Wi-Fi address,
+saved kiosk LAN URL and already-disabled AiMOR/updater/test packages; no package
+changes this session. Installed/enabled `home-hub.service` with LAN-interface
+binding, exact frame-IP allowlist and existing device cookie. Authenticated frame
+Wi-Fi API status succeeds; unpaired request is 403. USB forwarding removed. User
+linger is enabled. Service restart passes; host/frame reboot, DHCP reservations,
+encrypted or isolated transport for personal data and multi-day soak remain.
+See [`INTEGRATIONS.md`](INTEGRATIONS.md). No new firmware writes were performed.
 Brand/listing is not proof of the board or firmware.
 
 ## 1. Owner physical checks, then read-only discovery

@@ -1,0 +1,14 @@
+#!/bin/bash
+# Owner-local login and explicit frame selection; never takes a password argument.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PYTHON="$HOME/.local/share/home-hub/aura-venv/bin/python"
+if [ ! -x "$PYTHON" ]; then
+    echo 'Aura runtime is missing. Run scripts/install-aura-runtime first.' >&2
+    exit 1
+fi
+"$PYTHON" -B "$ROOT/aura_sync.py" setup
+# Re-read config only after a complete first sync and private token save succeeded.
+systemctl --user restart home-hub.service
+systemctl --user enable --now home-hub-aura.timer
+echo 'Aura sync is enabled; photos refresh automatically.'

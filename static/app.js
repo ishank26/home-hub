@@ -391,7 +391,9 @@
       ? `<span class="pill warn">Stale · last loaded ${esc(time(result.at))}</span>`
       : result.data.source === "sample"
         ? '<span class="pill">Sample data</span>'
-        : "";
+        : result.data.source === "unconfigured"
+          ? '<span class="pill warn">Setup needed</span>'
+          : "";
   }
   function frame(title, result, body, controls = "") {
     renderHTML(
@@ -783,11 +785,18 @@
       `<article class="quote-card"><span class="pill">${state.quoteIndex === r.data.todayIndex ? "Today's quote" : "From the collection"}</span><blockquote>${esc(q.text)}</blockquote><div class="a">${esc(q.author)}</div><div class="s">${esc(q.source)}</div></article><div class="center-row">${button(saved ? "Saved ✓" : "Save", "savequote", "btn", `aria-pressed="${saved}"`)}${button("Next quote →", "nextquote", "btn primary")}</div>`,
     );
   }
-  function photoURL(photo) {
-    return `/photos/${encodeURIComponent(photo.id)}${/^p\d{2}$/.test(photo.id) ? ".svg" : ""}`;
+  function photoURL(photo, thumbnail = false) {
+    return `/photos/${encodeURIComponent(photo.id)}${/^p\d{2}$/.test(photo.id) ? ".svg" : thumbnail ? ".thumb" : ""}`;
+  }
+  async function readPhotos() {
+    const r = await request("/api/photos/manifest");
+    r.stale = r.stale || r.data.state === "stale";
+    if (r.stale && r.data.syncedAt) r.at = Date.parse(r.data.syncedAt);
+    if (!r.data.collections.includes(state.collection)) state.collection = "All";
+    return r;
   }
   async function photos(gen) {
-    const r = await request("/api/photos/manifest");
+    const r = await readPhotos();
     if (!current(gen)) return;
     state.photos = r;
     drawPhotos();
@@ -803,7 +812,7 @@
     frame(
       "Photos",
       r,
-      `<div class="quick">${r.data.collections.map((c, i) => button(esc(c), `collection:${i}`, "chip", `aria-pressed="${state.collection === c}"`)).join("")}<span class="meta">${list.length} photos · Synced ${esc(time(r.data.syncedAt))}</span></div><div class="photo-grid">${list.map((p, i) => button(`<img src="${photoURL(p)}" alt="Photo ${i + 1}" loading="lazy" decoding="async">`, `photo:${i}`, "")).join("") || '<div class="empty">No photos in this collection</div>'}</div>`,
+      `<div class="quick">${r.data.collections.map((c, i) => button(esc(c), `collection:${i}`, "chip", `aria-pressed="${state.collection === c}"`)).join("")}<span class="meta">${list.length} photos · ${r.data.syncedAt ? "Synced " + esc(time(r.data.syncedAt)) : "Not synced yet"}</span></div><div class="photo-grid">${list.map((p, i) => button(`<img src="${photoURL(p, true)}" alt="Photo ${i + 1}" loading="lazy" decoding="async">`, `photo:${i}`, "")).join("") || '<div class="empty">No photos in this collection</div>'}</div>`,
       button(
         "Start slideshow",
         "slideshow",
@@ -836,7 +845,7 @@
     frame(
       "Smart Home",
       r,
-      `<div class="status-row">${d.contacts.map((c) => `<div class="contact ${c.open ? "open" : ""}"><i class="dot ${c.open ? "warn" : ""}"></i>${esc(c.name)} · ${c.open ? "Open" + (c.openMinutes ? " " + c.openMinutes + " min" : "") : "Closed"}</div>`).join("")}<span class="meta">${esc(d.hub.name)} · ${d.hub.online ? "Online" : "Unavailable"}</span></div><div class="scenes">${d.scenes.map((s, i) => button(state.homeBusy ? "Sending…" : esc(s.name), `scene:${i}`, i === 2 ? "off" : "", state.homeBusy || r.stale ? "disabled" : "")).join("")}</div><div class="lights">${d.lights.map((l, i) => button(`<span class="top"><span>${svg(bulb, 30)}</span><span>${state.homeBusy ? "Sending…" : l.on ? "On" : "Off"}</span></span><span class="n">${esc(l.name)}</span><span class="d">${esc(l.detail)}${l.on && l.brightness != null ? " · " + l.brightness + "%" : ""}</span>`, `light:${i}`, `light ${state.homeBusy ? "busy" : ""}`, `aria-pressed="${l.on}" ${state.homeBusy || r.stale ? "disabled" : ""}`)).join("")}</div><div class="cams">${d.cameras.map((c) => `<article class="cam"><span class="tag">${esc(c.name)}</span><span class="note">Sample placeholder · no live camera connected</span></article>`).join("")}<article class="pending"><b>${esc(d.doorbell.name)}</b><span>${d.doorbell.verified ? "Verified · video unavailable" : "Pending verification"}</span></article></div>`,
+      `<div class="status-row">${d.contacts.map((c) => `<div class="contact ${c.open ? "open" : ""}"><i class="dot ${c.open ? "warn" : ""}"></i>${esc(c.name)} · ${c.available === false ? "Unavailable" : c.open ? "Open" + (c.openMinutes ? " " + c.openMinutes + " min" : "") : "Closed"}</div>`).join("")}<span class="meta">${esc(d.hub.name)} · ${d.hub.online ? "Online" : "Unavailable"}</span></div><div class="scenes">${d.scenes.map((s, i) => button(state.homeBusy ? "Sending…" : esc(s.name), `scene:${i}`, i === 2 ? "off" : "", state.homeBusy || r.stale ? "disabled" : "")).join("")}</div><div class="lights">${d.lights.map((l, i) => button(`<span class="top"><span>${svg(bulb, 30)}</span><span>${l.available === false ? "Unavailable" : state.homeBusy ? "Sending…" : l.on ? "On" : "Off"}</span></span><span class="n">${esc(l.name)}</span><span class="d">${esc(l.detail)}${l.on && l.brightness != null ? " · " + l.brightness + "%" : ""}</span>`, `light:${i}`, `light ${state.homeBusy ? "busy" : ""}`, `aria-pressed="${l.on}" ${state.homeBusy || r.stale || l.available === false ? "disabled" : ""}`)).join("")}</div><div class="cams">${d.cameras.map((c) => `<article class="cam"><span class="tag">${esc(c.name)}</span><span class="note">Sample placeholder · no live camera connected</span></article>`).join("")}<article class="pending"><b>${esc(d.doorbell.name)}</b><span>${d.doorbell.verified ? "Verified · video unavailable" : "Pending verification"}</span></article></div>`,
     );
   }
   async function homeCommand(commands, undo = null) {
@@ -893,7 +902,7 @@
     frame(
       "Settings",
       r,
-      `<div class="set-grid"><article class="card settings-scroll"><h2>Sources</h2>${state.status.data.sources.map((src, i) => `<div class="src row-line"><i class="dot ${state.status.stale || ["failed", "stale"].includes(src.state) ? "warn" : src.state === "sample" ? "sample" : ""}"></i><div class="grow"><b>${esc(src.name)}</b><span>${state.status.stale ? "Stale status" : esc(src.state)} · ${esc(time(src.updatedAt))}</span></div>${button("Retry", `retry:${i}`, "link")}</div>`).join("")}<p class="meta">Sample sources are not connected to real services.</p></article><article class="card settings-scroll"><h2>Display</h2><div class="set-row"><span class="l">Clock</span><div class="seg">${button("12 hour", "clock:12", "", `aria-pressed="${!s.clock24h}"`)}${button("24 hour", "clock:24", "", `aria-pressed="${s.clock24h}"`)}</div></div><div class="set-row"><span class="l">Temperature</span><div class="seg">${["F", "C"].map((u) => button("°" + u, `units:${u}`, "", `aria-pressed="${s.units === u}"`)).join("")}</div></div>${[
+      `<div class="set-grid"><article class="card settings-scroll"><h2>Sources</h2>${state.status.data.sources.map((src, i) => `<div class="src row-line"><i class="dot ${state.status.stale || ["failed", "stale"].includes(src.state) ? "warn" : src.state === "sample" ? "sample" : ""}"></i><div class="grow"><b>${esc(src.name)}</b><span>${state.status.stale ? "Stale status" : esc(src.state)} · ${src.updatedAt ? esc(time(src.updatedAt)) : "Not connected"}</span></div>${button("Retry", `retry:${i}`, "link")}</div>`).join("")}<p class="meta">Sample sources are not connected to real services.</p></article><article class="card settings-scroll"><h2>Display</h2><div class="set-row"><span class="l">Clock</span><div class="seg">${button("12 hour", "clock:12", "", `aria-pressed="${!s.clock24h}"`)}${button("24 hour", "clock:24", "", `aria-pressed="${s.clock24h}"`)}</div></div><div class="set-row"><span class="l">Temperature</span><div class="seg">${["F", "C"].map((u) => button("°" + u, `units:${u}`, "", `aria-pressed="${s.units === u}"`)).join("")}</div></div>${[
         ["idleMinutes", "Screensaver after", "min"],
         ["photoSeconds", "Photo interval", "sec"],
         ["returnTodayMinutes", "Return to Today", "min"],
@@ -1033,25 +1042,39 @@
         overlay,
         '<section class="saver" aria-label="Photo screensaver"><img alt="Slideshow photo" style="opacity:0"><img alt="Slideshow photo" style="opacity:0"><div class="scrim"></div><div class="clock" data-drift><div class="t" data-clock></div><div class="d" data-date></div><div class="meta" id="saver-source"></div></div><div class="hint" style="opacity:0">↑ Swipe up to open</div></section>',
       );
-      try {
-        const r = await request("/api/photos/manifest");
-        if (gen !== state.generation) return;
-        saverPhotos = r.data.photos.filter(
-          (p) =>
-            state.collection === "All" ||
-            p.collections.includes(state.collection),
-        );
-        $("#saver-source").textContent = r.stale
-          ? "Stale photos"
-          : r.data.source === "sample"
-            ? "Sample photos"
-            : "";
-      } catch {
-        saverPhotos = [];
-        if (gen === state.generation)
-          $("#saver-source").textContent = "Photos unavailable";
+      let refreshBusy = false;
+      async function refreshPhotos() {
+        if (refreshBusy || gen !== state.generation) return;
+        refreshBusy = true;
+        try {
+          const r = await readPhotos();
+          if (gen !== state.generation) return;
+          saverPhotos = r.data.photos.filter(
+            (p) => state.collection === "All" || p.collections.includes(state.collection),
+          );
+          $("#saver-source").textContent = r.stale
+            ? "Stale photos"
+            : r.data.source === "sample"
+              ? "Sample photos"
+              : r.data.source === "unconfigured" ? "Aura photos need setup" : "Aura photos";
+          if (!saverPhotos.length) {
+            overlay.querySelectorAll(".saver img").forEach((img) => {
+              img.onload = null;
+              img.onerror = null;
+              img.removeAttribute("src");
+              img.style.opacity = "0";
+            });
+          }
+        } catch {
+          if (gen === state.generation)
+            $("#saver-source").textContent = "Photos unavailable";
+        } finally {
+          refreshBusy = false;
+        }
       }
+      await refreshPhotos();
       if (gen !== state.generation) return;
+      later(refreshPhotos, 60000);
       let index = 0,
         layer = 0;
       function nextPhoto() {
@@ -1065,6 +1088,10 @@
             images[1 - layer].style.opacity = "0";
             layer = 1 - layer;
           }
+        };
+        next.onerror = () => {
+          if (gen === state.generation)
+            $("#saver-source").textContent = "Photo unavailable · retrying";
         };
         next.src = photoURL(saverPhotos[index++ % saverPhotos.length]);
       }

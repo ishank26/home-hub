@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+"""Owner-local credential entry. Never echoes a token or prints upstream responses."""
+import getpass
+import json
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from integrations import HomeAssistant, private_json
+
+
+def save(path, value):
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix='.setup-')
+    try:
+        with os.fdopen(fd, 'w') as handle:
+            json.dump(value, handle, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    finally:
+        Path(tmp).unlink(missing_ok=True)
+
+
+def main():
+    directory = Path.home() / '.config/home-hub'
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    config_path = directory / 'config.json'
+    config = private_json(config_path) if config_path.exists() else {}
+    secrets_path = directory / 'secrets.json'
+    secrets = private_json(secrets_path) if secrets_path.exists() else {}
+    print('Create a dedicated non-admin Home Assistant user and its long-lived token locally.')
+    print('Paste that token here. It is stored privately on this server and never echoed.')
+    token = getpass.getpass('Home Hub HA token (blank keeps the existing token): ')
+    token = token or secrets.get('homeassistant_token', '')
+    if not token:
+        raise SystemExit('No token supplied; nothing changed.')
+    ha = dict(config.get('homeassistant', {}))
+    for kind, domain in [('calendars', 'calendar'), ('lights', 'light'), ('contacts', 'binary_sensor')]:
+        print(f'Use exact {domain} entity IDs from HA Settings → Devices & services → Entities.')
+        text = input(f'{kind}: comma-separated IDs (blank keeps the existing selection): ').strip()
+        if text:
+            ha[kind] = [{'entity': item.strip(), 'name': item.strip().split('.', 1)[-1].replace('_', ' ').title()}
+                        for item in text.split(',')]
+    adapter = HomeAssistant(ha, token)
+    adapter.request('/api/')
+    for entries in adapter.entries.values():
+        for entry in entries:
+            adapter.read_state(entry['entity'])
+    secrets['homeassistant_token'] = token
+    config['homeassistant'] = ha
+    save(secrets_path, secrets)
+    save(config_path, config)
+    print('Connection and selected entities checked. Run: systemctl --user restart home-hub.service')
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (ValueError, OSError) as error:
+        raise SystemExit('Setup failed; check the private configuration and entity IDs.') from None
+    except Exception:
+        raise SystemExit('Connection failed; verify the token and Home Assistant locally.') from None

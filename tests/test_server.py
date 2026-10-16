@@ -121,6 +121,29 @@ class ServerTests(unittest.TestCase):
         for body in [{'kind': 'light', 'id': 'missing', 'on': True}, {'kind': 'light', 'id': 'living', 'on': 1}, {'kind': 'scene', 'id': 'missing'}, {'kind': 'lock'}]:
             self.assertEqual(self.request('/api/home/action', 'POST', body)[0], 400)
 
+    def test_photo_manifest_routes_and_stale_status(self):
+        from aura_sync import atomic_json
+        from photos import PhotoLibrary
+        root = server.Path(self.temp.name) / 'photos'
+        (root / 'cache').mkdir(parents=True)
+        pid = 'a' * 32
+        atomic_json(root / 'manifest.json', {'photos': [{'id': pid}], 'syncedAt': server.iso(server.now())})
+        atomic_json(root / 'status.json', {'state': 'current'})
+        (root / 'cache' / (pid + '.jpg')).write_bytes(b'display-jpeg')
+        (root / 'cache' / (pid + '.thumb.jpg')).write_bytes(b'thumb-jpeg')
+        self.hub.photos = PhotoLibrary(root, enabled=True)
+        manifest = self.api('/api/photos/manifest')
+        self.assertEqual(manifest['source'], 'aura')
+        self.assertEqual(manifest['photos'][0]['id'], pid)
+        status, headers, raw = self.request('/photos/' + pid)
+        self.assertEqual((status, headers['Content-Type'], raw), (200, 'image/jpeg', b'display-jpeg'))
+        self.assertEqual(self.request('/photos/' + pid + '.thumb')[2], b'thumb-jpeg')
+        self.assertEqual(self.request('/photos/' + 'b' * 32)[0], 404)
+        atomic_json(root / 'status.json', {'state': 'failed'})
+        self.assertEqual(self.api('/api/photos/manifest')['state'], 'stale')
+        sources = self.api('/api/status')['sources']
+        self.assertEqual(next(s for s in sources if s['id'] == 'photos')['state'], 'stale')
+
     def test_allowlist_policy(self):
         # A synthetic handler avoids depending on this host's LAN interfaces.
         for networks, peer, expected in [([], '127.0.0.1', True), ([], '::1', True),
@@ -133,13 +156,67 @@ class ServerTests(unittest.TestCase):
             with patch.object(handler, 'send_error') as denied:
                 self.assertEqual(handler.allowed(), expected)
                 self.assertEqual(denied.called, not expected)
+        token = 'T' * 43
+        lan = [ipaddress.ip_network('192.0.2.0/24')]
+        for peer, cookie, expected in [('127.0.0.1', '', True), ('192.0.2.10', '', False),
+                                       ('192.0.2.10', 'hub_device=' + 'X' * 43, False),
+                                       ('192.0.2.10', 'other=1; hub_device=' + token, True),
+                                       ('198.51.100.7', 'hub_device=' + token, False)]:
+            handler = object.__new__(server.make_handler(self.hub, lan, token))
+            handler.client_address = (peer, 123)
+            handler.headers = {'Cookie': cookie}
+            with patch.object(handler, 'send_error'):
+                self.assertEqual(handler.allowed(), expected, (peer, cookie))
         for method in ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE']:
             with patch.object(self.handler, 'allowed', return_value=False):
                 # Verify each method exits before parsing data or serving files.
                 handler = object.__new__(self.handler)
+                handler.path = '/api/settings'
                 with patch.object(handler, 'reply') as reply:
                     getattr(handler, 'do_' + method)()
                     reply.assert_not_called()
+
+    def test_pairing_sets_http_only_cookie(self):
+        token = 'P' * 43
+        httpd = ThreadingHTTPServer(('127.0.0.1', 0), server.make_handler(self.hub, [], token))
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            def get(path):
+                conn = http.client.HTTPConnection('127.0.0.1', httpd.server_port, timeout=5)
+                conn.request('GET', path)
+                response = conn.getresponse()
+                response.read()
+                conn.close()
+                return response.status, dict(response.getheaders())
+            for path in ['/pair', '/pair?token=wrong', '/pair?token=' + token + '&token=' + token]:
+                self.assertEqual(get(path)[0], 403, path)
+            self.assertEqual(get('/pair?a=1&b=2&c=3')[0], 400)
+            status, headers = get('/pair?token=' + token)
+            self.assertEqual(status, 302)
+            self.assertEqual(headers['Location'], '/')
+            self.assertIn('hub_device=' + token, headers['Set-Cookie'])
+            self.assertIn('HttpOnly', headers['Set-Cookie'])
+            self.assertIn('SameSite=Strict', headers['Set-Cookie'])
+            self.assertEqual(headers['Cache-Control'], 'no-store')
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join()
+
+    def test_load_token_creates_private_file(self):
+        path = server.Path(self.temp.name) / 'cfg' / 'device-token'
+        token = server.load_token(path)
+        self.assertGreaterEqual(len(token), 32)
+        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(server.load_token(path), token)
+        path.chmod(0o644)
+        with self.assertRaises(SystemExit):
+            server.load_token(path)
+        path.chmod(0o600)
+        path.write_text('short\n')
+        with self.assertRaises(SystemExit):
+            server.load_token(path)
 
 
 if __name__ == '__main__':

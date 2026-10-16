@@ -1,0 +1,16 @@
+#!/bin/bash
+# Uses the standard PyPI registry, pinned binary version and SHA-256. No root.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+VENV="$HOME/.local/share/home-hub/aura-venv"
+umask 077
+if [ ! -x "$VENV/bin/python" ]; then
+    python3 -m venv "$VENV"
+fi
+"$VENV/bin/python" -m pip install --disable-pip-version-check --require-hashes \
+    --only-binary=:all: --index-url https://pypi.org/simple -r "$ROOT/requirements-aura.txt"
+mkdir -p "$HOME/.local/share/home-hub/data/photos" "$HOME/.config/systemd/user"
+install -m 644 "$ROOT/deploy/home-hub-aura.service" "$HOME/.config/systemd/user/"
+install -m 644 "$ROOT/deploy/home-hub-aura.timer" "$HOME/.config/systemd/user/"
+systemctl --user daemon-reload
+echo 'Aura runtime and timer installed. Run scripts/aura-setup to sign in locally.'

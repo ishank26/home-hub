@@ -2,31 +2,41 @@
 """Humblestead Home Hub backend: static UI plus a small JSON API.
 
 Standard library only. Binds 127.0.0.1 by default; pass --host and one or more
---allow addresses to serve the frame on the LAN. Credentials (Home Assistant,
+--allow addresses to serve the frame on the LAN. LAN clients also need the device
+token: the frame opens /pair?token=... once per launch and then carries an HttpOnly
+cookie. Loopback clients need no token. Credentials (Home Assistant,
 Aura, calendar) belong in adapters on this server and never reach the browser.
 Until those adapters exist every response is marked "source": "sample".
 """
 import argparse
 import copy
+import hmac
 import ipaddress
 import json
 import os
 import re
+import secrets
+import stat
 import tempfile
 import threading
 import time
 import uuid
 from datetime import datetime, timedelta
 from http import HTTPStatus
+from http.cookies import CookieError, SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs
+
+from integrations import SourceUnavailable, from_config, private_json
+from photos import PhotoLibrary
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / 'static'
 DATA = Path(os.environ.get('HOME_HUB_DATA', ROOT / 'data'))
 CATEGORIES = ('Produce', 'Dairy', 'Pantry', 'Household', 'Other')
 MAX_BODY = 16384
+TOKEN_COOKIE = 'hub_device'
 LOCK = threading.Lock()
 
 
@@ -184,8 +194,10 @@ def photo_svg(index):
 
 
 class Hub:
-    def __init__(self, store):
+    def __init__(self, store, integrations=None, photos=None):
         self.store = store
+        self.integrations = integrations
+        self.photos = photos
         if self.store.read('shopping', None) is None:
             created = iso(now())
             self.store.write('shopping', {'items': [
@@ -210,21 +222,37 @@ class Hub:
         return self.shopping()
 
     def calendar(self, start, end):
+        if self.integrations is not None:
+            return self.integrations.calendar(start, end)
         events = [e for e in sample_events(now())
                   if datetime.fromisoformat(e['end']) > start and datetime.fromisoformat(e['start']) < end]
         return {'source': 'sample', 'updatedAt': iso(now()), 'calendars': CALENDARS, 'events': events}
 
     def status(self):
         t = now()
-        return {'sources': [
+        sources = [
             {'id': 'calendar', 'name': 'Calendar', 'state': 'sample', 'updatedAt': iso(t)},
             {'id': 'weather', 'name': 'Weather', 'state': 'sample', 'updatedAt': iso(t)},
             {'id': 'photos', 'name': 'Aura photos', 'state': 'sample', 'updatedAt': iso(t)},
             {'id': 'shopping', 'name': 'Shopping', 'state': 'current', 'updatedAt': iso(t)},
             {'id': 'home', 'name': 'Home Assistant', 'state': 'sample', 'updatedAt': iso(t)},
-        ]}
+        ]
+        if self.integrations is not None:
+            for source in sources:
+                if source['id'] in ('calendar', 'home'):
+                    source.update(self.integrations.health.get(source['id'], {'state': 'failed', 'updatedAt': None}))
+        if self.photos is not None and self.photos.enabled:
+            next(source for source in sources if source['id'] == 'photos').update(self.photos.status())
+        return {'sources': sources}
+
+    def home_data(self):
+        if self.integrations is not None:
+            return self.integrations.home()
+        return {'source': 'sample', 'updatedAt': iso(now()), **self.home, 'alerts': self.alerts()}
 
     def alerts(self):
+        if self.integrations is not None:
+            return []
         found = []
         for contact in self.home['contacts']:
             if contact['open'] and contact.get('openMinutes', 0) >= 10:
@@ -233,6 +261,8 @@ class Hub:
         return found
 
     def home_action(self, body):
+        if self.integrations is not None:
+            return self.integrations.action(body)
         kind = body.get('kind')
         if kind == 'light':
             light = next((item for item in self.home['lights'] if item['id'] == body.get('id')), None)
@@ -267,7 +297,24 @@ def clean_item(body):
     return name, qty, category, notes
 
 
-def make_handler(hub, allowed):
+def load_token(path):
+    """Read the device token, creating a random one (mode 0600) on first use."""
+    path = Path(path)
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, 'w') as handle:
+            handle.write(secrets.token_urlsafe(32) + '\n')
+    metadata = path.lstat()
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != os.getuid() or metadata.st_mode & 0o077:
+        raise SystemExit(f'{path}: token must be an owner-only regular file (mode 0600)')
+    token = path.read_text().strip()
+    if not re.fullmatch(r'[A-Za-z0-9_-]{32,}', token):
+        raise SystemExit(f'{path}: token must be at least 32 URL-safe characters')
+    return token
+
+
+def make_handler(hub, allowed, token=None):
     class Handler(SimpleHTTPRequestHandler):
         server_version = 'HomeHub/0.1'
         sys_version = ''
@@ -278,15 +325,49 @@ def make_handler(hub, allowed):
         def log_message(self, format, *args):
             pass
 
+        def peer_permitted(self):
+            peer = ipaddress.ip_address(self.client_address[0])
+            return peer.is_loopback or any(peer in net for net in allowed)
+
+        def token_matches(self, value):
+            return token is not None and hmac.compare_digest(value.encode(), token.encode())
+
         def allowed(self):
             peer = ipaddress.ip_address(self.client_address[0])
-            if peer.is_loopback or any(peer in net for net in allowed):
+            if peer.is_loopback:
                 return True
+            if self.peer_permitted():
+                if token is None:
+                    return True
+                jar = SimpleCookie()
+                try:
+                    jar.load(self.headers.get('Cookie', ''))
+                except CookieError:
+                    pass
+                if TOKEN_COOKIE in jar and self.token_matches(jar[TOKEN_COOKIE].value):
+                    return True
             self.send_error(HTTPStatus.FORBIDDEN)
             return False
 
+        def pair(self, query):
+            # The frame opens /pair?token=... on launch; a valid token becomes an
+            # HttpOnly cookie, so later requests and the page itself carry no secret.
+            try:
+                values = parse_qs(query, max_num_fields=2).get('token', [])
+            except ValueError:
+                self.send_error(HTTPStatus.BAD_REQUEST)
+                return
+            if not self.peer_permitted() or len(values) != 1 or not self.token_matches(values[0]):
+                self.send_error(HTTPStatus.FORBIDDEN)
+                return
+            self.send_response(HTTPStatus.FOUND)
+            self.send_header('Set-Cookie', f'{TOKEN_COOKIE}={token}; Max-Age=31536000; Path=/; HttpOnly; SameSite=Strict')
+            self.send_header('Location', '/')
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+
         def end_headers(self):
-            self.send_header('Cache-Control', 'no-store' if self.path.startswith('/api/') else 'max-age=300')
+            self.send_header('Cache-Control', 'no-store' if self.path.startswith(('/api/', '/pair')) else 'max-age=300')
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('Referrer-Policy', 'no-referrer')
             super().end_headers()
@@ -320,19 +401,24 @@ def make_handler(hub, allowed):
                 super().do_HEAD()
 
         def do_GET(self):
+            path, _, query = self.path.partition('?')
+            if path == '/pair':
+                return self.pair(query)
             if not self.allowed():
                 return
-            path, _, query = self.path.partition('?')
             try:
                 params = {k: v[0] for k, v in parse_qs(query, max_num_fields=8).items()}
                 if path == '/api/today':
                     t = now()
-                    events = [e for e in hub.calendar(t, t + timedelta(days=1))['events']
-                              if not e['allDay'] and e['end'] > iso(t)][:4]
+                    day = t.replace(hour=0, minute=0, second=0, microsecond=0)
+                    calendar = hub.calendar(day, day + timedelta(days=2))
+                    events = [e for e in calendar['events']
+                              if not e['allDay'] and datetime.fromisoformat(e['end']) > t
+                              and datetime.fromisoformat(e['start']) < t + timedelta(days=1)][:4]
                     shop = [i for i in hub.shopping()['items'] if not i['done']]
                     shop.sort(key=lambda i: i['created'], reverse=True)
                     q = QUOTES[t.toordinal() % len(QUOTES)]
-                    self.reply({'source': 'sample', 'now': iso(t), 'events': events, 'calendars': CALENDARS,
+                    self.reply({'source': 'sample', 'now': iso(t), 'events': events, 'calendars': calendar['calendars'],
                                 'shoppingOpen': len(shop), 'shoppingTop': shop[:3], 'quote': q,
                                 'weather': sample_weather(t), 'alerts': hub.alerts()})
                 elif path == '/api/calendar':
@@ -348,9 +434,24 @@ def make_handler(hub, allowed):
                 elif path == '/api/quotes':
                     self.reply({'quotes': QUOTES, 'todayIndex': now().toordinal() % len(QUOTES)})
                 elif path == '/api/photos/manifest':
-                    self.reply({'source': 'sample', 'syncedAt': iso(now()), 'collections': ['All', 'Family', 'Trips', 'Seasonal'],
-                                'photos': [{'id': f'p{i:02d}', 'collections': ['All', ['Family', 'Trips', 'Seasonal'][i % 3]]}
-                                           for i in range(16)]})
+                    if hub.photos is not None and hub.photos.enabled:
+                        self.reply(hub.photos.manifest())
+                    else:
+                        self.reply({'source': 'sample', 'syncedAt': iso(now()), 'collections': ['All', 'Family', 'Trips', 'Seasonal'],
+                                    'photos': [{'id': f'p{i:02d}', 'collections': ['All', ['Family', 'Trips', 'Seasonal'][i % 3]]}
+                                               for i in range(16)]})
+                elif match := re.fullmatch(r'/photos/([a-f0-9]{32})(\.thumb)?', path):
+                    if hub.photos is None or not hub.photos.enabled:
+                        return self.reply({'error': 'not found'}, 404)
+                    try:
+                        raw = hub.photos.read(match[1], thumbnail=bool(match[2]))
+                    except FileNotFoundError:
+                        return self.reply({'error': 'not found'}, 404)
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'image/jpeg')
+                    self.send_header('Content-Length', str(len(raw)))
+                    self.end_headers()
+                    self.wfile.write(raw)
                 elif re.fullmatch(r'/photos/p\d{2}\.svg', path):
                     raw = photo_svg(int(path[9:11])).encode()
                     self.send_response(200)
@@ -359,7 +460,7 @@ def make_handler(hub, allowed):
                     self.end_headers()
                     self.wfile.write(raw)
                 elif path == '/api/home':
-                    self.reply({'source': 'sample', 'updatedAt': iso(now()), **hub.home, 'alerts': hub.alerts()})
+                    self.reply(hub.home_data())
                 elif path == '/api/settings':
                     self.reply(hub.settings())
                 elif path == '/api/status':
@@ -368,6 +469,8 @@ def make_handler(hub, allowed):
                     self.reply({'error': 'not found'}, 404)
                 else:
                     super().do_GET()
+            except SourceUnavailable as error:
+                self.reply({'error': str(error)}, 503)
             except (KeyError, ValueError):
                 self.reply({'error': 'bad request'}, 400)
 
@@ -384,7 +487,8 @@ def make_handler(hub, allowed):
                 elif self.path == '/api/shopping/clear':
                     self.reply(hub.mutate_shopping(lambda items: items.__setitem__(slice(None), [i for i in items if not i['done']])))
                 elif self.path == '/api/home/action':
-                    time.sleep(0.25)  # sample adapter latency, so "Sending…" is visible
+                    if hub.integrations is None:
+                        time.sleep(0.25)  # sample adapter latency
                     self.reply(hub.home_action(body))
                 elif self.path == '/api/settings':
                     current = hub.settings()
@@ -404,6 +508,8 @@ def make_handler(hub, allowed):
                     self.reply(current)
                 else:
                     self.reply({'error': 'not found'}, 404)
+            except SourceUnavailable as error:
+                self.reply({'error': str(error)}, 503)
             except (KeyError, ValueError, json.JSONDecodeError):
                 self.reply({'error': 'bad request'}, 400)
 
@@ -446,12 +552,24 @@ def main():
     parser.add_argument('--host', default='127.0.0.1')
     parser.add_argument('--port', type=int, default=8099)
     parser.add_argument('--allow', action='append', default=[], help='extra client address or CIDR (the frame)')
+    parser.add_argument('--token-file', default=str(Path.home() / '.config' / 'home-hub' / 'device-token'),
+                        help='device token required from --allow clients (created on first use, mode 0600)')
+    parser.add_argument('--no-token', action='store_true', help='allow --allow clients without a token (not recommended)')
+    parser.add_argument('--config', help='private JSON configuration outside Git')
     args = parser.parse_args()
+    config = private_json(args.config) if args.config else {}
+    network = config.get('network', {})
+    if args.config:
+        args.host = network.get('host', args.host)
+        args.allow = network.get('allow', args.allow)
     allowed = [ipaddress.ip_network(a, strict=False) for a in args.allow]
-    hub = Hub(Store(DATA))
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(hub, allowed))
+    token = None if args.no_token or not allowed else load_token(args.token_file)
+    hub = Hub(Store(DATA), from_config(config),
+              PhotoLibrary(DATA / 'photos', enabled=config.get('photos', {}).get('source') == 'aura'))
+    server = ThreadingHTTPServer((args.host, args.port), make_handler(hub, allowed, token))
     extra = ''.join(', ' + str(address) for address in allowed)
-    print(f'Home Hub on http://{args.host}:{server.server_port} (allowed: loopback{extra})', flush=True)
+    guard = f'; LAN clients need the token in {args.token_file}' if token else ''
+    print(f'Home Hub on http://{args.host}:{server.server_port} (allowed: loopback{extra}{guard})', flush=True)
     server.serve_forever()
 
 

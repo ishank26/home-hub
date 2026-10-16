@@ -1,0 +1,21 @@
+[Unit]
+Description=Read-only Aura photo sync for Home Hub
+After=network-online.target
+ConditionPathExists=%h/.config/home-hub/aura-session.json
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/work/home-hub
+ExecStart=%h/.local/share/home-hub/aura-venv/bin/python -B %h/work/home-hub/aura_sync.py sync
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadOnlyPaths=%h/.config/home-hub
+ReadWritePaths=%h/.local/share/home-hub/data/photos
+PrivateTmp=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=512M
+CPUQuota=50%
+TasksMax=8
+TimeoutStartSec=12min
+Nice=10
