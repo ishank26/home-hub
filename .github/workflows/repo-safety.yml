@@ -1,0 +1,16 @@
+name: Repository safety
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check tracked files and complete history
+        run: python3 scripts/check-repo-safety --all-index --all-history
+      - name: Verify safety policy
+        run: python3 -m unittest discover -s tests -p test_repo_safety.py -v

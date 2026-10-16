@@ -15,3 +15,22 @@ diagnostics/
 *.img
 *.dump
 kiosk/build/
+
+# Account credentials, private keys and local integration runtime.
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+secrets.json
+secrets.yaml
+secrets.yml
+credentials*.json
+auth.json
+*session*.json
+device-token
+config.local.json
+photos/cache/

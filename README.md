@@ -123,6 +123,20 @@ Before committing, stage the intended files and run
 symlinks and unknown binaries; only the three hash-verified, licensed font files
 are explicitly allowed. It supplements manual review, not a secrecy guarantee.
 
+Enable the versioned commit/push guards after cloning:
+
+```sh
+git config core.hooksPath .githooks
+python3 scripts/check-repo-safety --all-index --all-history
+```
+
+The commit hook checks staged files; the push hook checks the full index and every
+reachable historical file version plus commit/tag messages. GitHub CI repeats the
+full audit. Hooks can be bypassed, and CI runs after upload, so keep credentials
+under `~/.config/home-hub/` and runtime photos/data outside the checkout. Ignore
+rules and scanners reduce mistakes; they cannot guarantee detection of every
+possible secret. Keep the repository private.
+
 Next setup steps: authenticate the Aura mirror, connect the dashboard to HA, and
 select weather/location and device allowlists. HA to-do with an offline queue is
 still planned; shopping currently uses a local store.
