@@ -6,12 +6,13 @@ The backend uses Python's standard library; the frontend is plain JavaScript.
 All eight views and the idle/screensaver/night modes work. Shopping and settings
 persist locally. The default demo uses sample calendar/weather/photos/devices;
 the deployed integration configuration shows empty calendars/devices until setup.
-The dashboard still needs its dedicated Home Assistant credential and live device setup.
+Live Open-Meteo weather is configured on the deployed frame. The dashboard still
+needs the remaining device enrollment and Aura login.
 
 **2026-10-15 deployment update:** the frame now has WebView 106 and the kiosk,
 and the dashboard runs as an enabled user service over Wi-Fi with frame-IP and
 device-cookie checks. The iCloud/HA adapter is implemented, iCloud is authenticated in HA, and two
-family calendars are selected. Dashboard access is deferred pending its HA credential. See
+family calendars are connected through the dedicated HA credential. See
 [`INTEGRATIONS.md`](INTEGRATIONS.md) for setup and verified limitations.
 
 ## Run
@@ -137,8 +138,7 @@ under `~/.config/home-hub/` and runtime photos/data outside the checkout. Ignore
 rules and scanners reduce mistakes; they cannot guarantee detection of every
 possible secret. Keep the repository private.
 
-Next setup steps: authenticate the Aura mirror, connect the dashboard to HA, and
-select weather/location and device allowlists. HA to-do with an offline queue is
+Next setup steps: authenticate the Aura mirror and finish the remaining device enrollment. HA to-do with an offline queue is
 still planned; shopping currently uses a local store.
 
 ## Frame kiosk (USB)
@@ -181,5 +181,5 @@ and the mirror picks them up after sync. [Protocol and operation](docs/aura-prot
 
 Full backend/image tests: `~/.local/share/home-hub/aura-venv/bin/python -m unittest discover -s tests -v`.
 The normal stdlib-only test run skips the five Pillow-dependent test methods when
-Pillow is absent; the dedicated-runtime verification ran all 44 tests with no skips.
+Pillow is absent; the dedicated-runtime verification now runs 53 tests with no skips.
 Photo browser flow: `NODE_PATH=/tmp/home-hub-browser/node_modules node tests/ui-aura.cjs`.

@@ -4,6 +4,7 @@ import ipaddress
 import json
 import tempfile
 import threading
+import time
 import unittest
 from datetime import datetime, timedelta
 from http.server import ThreadingHTTPServer
@@ -13,6 +14,34 @@ import server
 
 
 class ServerTests(unittest.TestCase):
+    def test_today_survives_concurrent_slow_sources_and_reuses_work(self):
+        gate = threading.Event()
+
+        def slow():
+            gate.wait(1)
+            raise server.SourceUnavailable('offline')
+
+        try:
+            with patch.object(self.hub, 'calendar', side_effect=lambda *args: slow()) as calendar, \
+                 patch.object(self.hub, 'weather', side_effect=slow) as weather, \
+                 patch.object(server, 'TODAY_TIMEOUT', 0.02):
+                started = time.monotonic()
+                for _ in range(2):
+                    status, _, raw = self.request('/api/today')
+                    data = json.loads(raw)
+                    self.assertEqual(status, 200)
+                    self.assertEqual(data['calendarSource'], 'failed')
+                    self.assertEqual(data['weather']['source'], 'failed')
+                    self.assertIn('shoppingOpen', data)
+                    self.assertEqual({a['view'] for a in data['alerts'] if a.get('id', '').endswith('-offline')},
+                                     {'calendar', 'weather'})
+                    self.assertTrue(all(a['severity'] == 'error' for a in data['alerts'] if a.get('id', '').endswith('-offline')))
+                self.assertLess(time.monotonic() - started, 0.5)
+                self.assertEqual(calendar.call_count, 1)
+                self.assertEqual(weather.call_count, 1)
+        finally:
+            gate.set()
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.hub = server.Hub(server.Store(self.temp.name))

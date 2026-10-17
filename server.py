@@ -21,6 +21,7 @@ import tempfile
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import datetime, timedelta
 from http import HTTPStatus
 from http.cookies import CookieError, SimpleCookie
@@ -30,6 +31,7 @@ from urllib.parse import parse_qs
 
 from integrations import SourceUnavailable, from_config, private_json
 from photos import PhotoLibrary
+from weather import Weather, empty_weather
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / 'static'
@@ -38,6 +40,8 @@ CATEGORIES = ('Produce', 'Dairy', 'Pantry', 'Household', 'Other')
 MAX_BODY = 16384
 TOKEN_COOKIE = 'hub_device'
 LOCK = threading.Lock()
+TODAY_TIMEOUT = 4.5
+SOURCE_WORKERS = ThreadPoolExecutor(max_workers=2, thread_name_prefix='hub-source')
 
 
 def now():
@@ -194,10 +198,13 @@ def photo_svg(index):
 
 
 class Hub:
-    def __init__(self, store, integrations=None, photos=None):
+    def __init__(self, store, integrations=None, photos=None, weather=None):
         self.store = store
         self.integrations = integrations
         self.photos = photos
+        self.weather_provider = weather
+        self.today_jobs = {}
+        self.today_lock = threading.Lock()
         if self.store.read('shopping', None) is None:
             created = iso(now())
             self.store.write('shopping', {'items': [
@@ -228,6 +235,35 @@ class Hub:
                   if datetime.fromisoformat(e['end']) > start and datetime.fromisoformat(e['start']) < end]
         return {'source': 'sample', 'updatedAt': iso(now()), 'calendars': CALENDARS, 'events': events}
 
+    def weather(self):
+        return self.weather_provider.get() if self.weather_provider is not None else sample_weather(now())
+
+    def today_sources(self, day):
+        # Reuse in-flight work so concurrent screen refreshes cannot queue more
+        # upstream requests. The whole Today response stays below fetch's timeout.
+        key = day.isoformat()
+        with self.today_lock:
+            for name, load in [('calendar', lambda: self.calendar(day, day + timedelta(days=2))),
+                               ('weather', self.weather)]:
+                old = self.today_jobs.get(name)
+                if old is None or old[1].done():
+                    self.today_jobs[name] = (key, SOURCE_WORKERS.submit(load))
+            jobs = dict(self.today_jobs)
+        wait([job[1] for job in jobs.values()], timeout=TODAY_TIMEOUT)
+        values, alerts = {}, []
+        for name, (job_key, future) in jobs.items():
+            try:
+                if not future.done() or job_key != key:
+                    raise SourceUnavailable('Refresh pending')
+                values[name] = future.result()
+            except SourceUnavailable:
+                values[name] = (empty_weather('failed') if name == 'weather' else
+                                {'source': 'failed', 'events': [], 'calendars': []})
+                alerts.append({'id': name + '-offline', 'severity': 'error',
+                               'text': name.title() + ' unavailable', 'view': name,
+                               'detail': 'Retry in ' + name.title()})
+        return values['calendar'], values['weather'], alerts
+
     def status(self):
         t = now()
         sources = [
@@ -243,6 +279,8 @@ class Hub:
                     source.update(self.integrations.health.get(source['id'], {'state': 'failed', 'updatedAt': None}))
         if self.photos is not None and self.photos.enabled:
             next(source for source in sources if source['id'] == 'photos').update(self.photos.status())
+        if self.weather_provider is not None:
+            next(source for source in sources if source['id'] == 'weather').update(self.weather_provider.health)
         return {'sources': sources}
 
     def home_data(self):
@@ -411,16 +449,17 @@ def make_handler(hub, allowed, token=None):
                 if path == '/api/today':
                     t = now()
                     day = t.replace(hour=0, minute=0, second=0, microsecond=0)
-                    calendar = hub.calendar(day, day + timedelta(days=2))
+                    calendar, weather, source_alerts = hub.today_sources(day)
                     events = [e for e in calendar['events']
                               if not e['allDay'] and datetime.fromisoformat(e['end']) > t
                               and datetime.fromisoformat(e['start']) < t + timedelta(days=1)][:4]
                     shop = [i for i in hub.shopping()['items'] if not i['done']]
                     shop.sort(key=lambda i: i['created'], reverse=True)
                     q = QUOTES[t.toordinal() % len(QUOTES)]
-                    self.reply({'source': 'sample', 'now': iso(t), 'events': events, 'calendars': calendar['calendars'],
+                    self.reply({'source': 'local' if hub.integrations is not None else 'sample',
+                                'calendarSource': calendar.get('source'), 'now': iso(t), 'events': events, 'calendars': calendar['calendars'],
                                 'shoppingOpen': len(shop), 'shoppingTop': shop[:3], 'quote': q,
-                                'weather': sample_weather(t), 'alerts': hub.alerts()})
+                                'weather': weather, 'alerts': hub.alerts() + source_alerts})
                 elif path == '/api/calendar':
                     start = datetime.fromisoformat(params['from'])
                     if start.tzinfo is None:
@@ -430,7 +469,7 @@ def make_handler(hub, allowed, token=None):
                 elif path == '/api/shopping':
                     self.reply(hub.shopping())
                 elif path == '/api/weather':
-                    self.reply(sample_weather(now()))
+                    self.reply(hub.weather())
                 elif path == '/api/quotes':
                     self.reply({'quotes': QUOTES, 'todayIndex': now().toordinal() % len(QUOTES)})
                 elif path == '/api/photos/manifest':
@@ -565,7 +604,8 @@ def main():
     allowed = [ipaddress.ip_network(a, strict=False) for a in args.allow]
     token = None if args.no_token or not allowed else load_token(args.token_file)
     hub = Hub(Store(DATA), from_config(config),
-              PhotoLibrary(DATA / 'photos', enabled=config.get('photos', {}).get('source') == 'aura'))
+              PhotoLibrary(DATA / 'photos', enabled=config.get('photos', {}).get('source') == 'aura'),
+              Weather(config.get('weather')) if args.config else None)
     server = ThreadingHTTPServer((args.host, args.port), make_handler(hub, allowed, token))
     extra = ''.join(', ' + str(address) for address in allowed)
     guard = f'; LAN clients need the token in {args.token_file}' if token else ''

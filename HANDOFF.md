@@ -264,3 +264,24 @@ personal photos downloaded, no Aura cloud writes or live acceptance. iPhone →
 official Aura app → selected Aura frame → Home Hub is the implemented route.
 Calendar remains authenticated in HA but not yet on the frame; owner-selected
 family calendar IDs stay in private config.
+
+
+## 2026-10-17 — Live weather and device enrollment continuation
+
+Owner requested a fully functional tablet, authorized Deco-mesh discovery and
+confirmed creating the dedicated homehub user. Aura login is explicitly deferred.
+Real server-side Open-Meteo weather is configured privately and verified over the
+frame Wi-Fi link; twelve-hour/seven-day data and model-estimate labels replace
+sample weather. Today isolates slow source failures within a 4.5-second wait;
+53 backend tests and both browser suites pass, with independent review approval.
+Twinkly enrolled in HA and its light is selected privately; two C110 cameras need
+Tapo authentication. Three Deco nodes also discovered. No H100 or Govee response;
+no device reset, custom integration or HA network exposure change.
+
+Dedicated HA token entry succeeded; both selected calendars return real events
+and Twinkly is available. Tablet reboot completed and kiosk resumed automatically.
+Remaining: final family-device acceptance; Tapo camera login and exact stream support; H100/T110 availability,
+pairing and physical contact test; Govee LAN compatibility; Aura login/first sync;
+HA-backed phone shopping synchronization; selected scenes and weather alerts;
+DHCP/restart/soak acceptance. Shopping currently persists locally. Do not claim
+all integrations are functional until these gates pass.
