@@ -16,5 +16,8 @@
     "longitude": 0.0,
     "name": "Your town",
     "timezone": "America/New_York"
+  },
+  "shopping": {
+    "source": "local"
   }
 }

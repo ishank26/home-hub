@@ -32,6 +32,7 @@ from urllib.parse import parse_qs
 from integrations import SourceUnavailable, from_config, private_json
 from photos import PhotoLibrary
 from weather import Weather, empty_weather
+from shopping import ShoppingBridge
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / 'static'
@@ -41,7 +42,7 @@ MAX_BODY = 16384
 TOKEN_COOKIE = 'hub_device'
 LOCK = threading.Lock()
 TODAY_TIMEOUT = 4.5
-SOURCE_WORKERS = ThreadPoolExecutor(max_workers=2, thread_name_prefix='hub-source')
+SOURCE_WORKERS = ThreadPoolExecutor(max_workers=3, thread_name_prefix='hub-source')
 
 
 def now():
@@ -198,11 +199,12 @@ def photo_svg(index):
 
 
 class Hub:
-    def __init__(self, store, integrations=None, photos=None, weather=None):
+    def __init__(self, store, integrations=None, photos=None, weather=None, shopping=None):
         self.store = store
         self.integrations = integrations
         self.photos = photos
         self.weather_provider = weather
+        self.shopping_bridge = shopping
         self.today_jobs = {}
         self.today_lock = threading.Lock()
         if self.store.read('shopping', None) is None:
@@ -218,10 +220,14 @@ class Hub:
         return value
 
     def shopping(self):
+        if self.shopping_bridge is not None:
+            return self.shopping_bridge.get()
         return {'source': 'local', 'updatedAt': iso(now()), 'categories': list(CATEGORIES), 'quickAdd': QUICK_ADD,
                 **self.store.read('shopping', {'items': []})}
 
-    def mutate_shopping(self, change):
+    def mutate_shopping(self, change, request_key=None):
+        if self.shopping_bridge is not None:
+            return self.shopping_bridge.mutate(change, request_key)
         with LOCK:
             data = self.store.read('shopping', {'items': []})
             change(data['items'])
@@ -244,7 +250,7 @@ class Hub:
         key = day.isoformat()
         with self.today_lock:
             for name, load in [('calendar', lambda: self.calendar(day, day + timedelta(days=2))),
-                               ('weather', self.weather)]:
+                               ('weather', self.weather), ('shopping', self.shopping)]:
                 old = self.today_jobs.get(name)
                 if old is None or old[1].done():
                     self.today_jobs[name] = (key, SOURCE_WORKERS.submit(load))
@@ -258,11 +264,12 @@ class Hub:
                 values[name] = future.result()
             except SourceUnavailable:
                 values[name] = (empty_weather('failed') if name == 'weather' else
+                                {'source': 'failed', 'items': []} if name == 'shopping' else
                                 {'source': 'failed', 'events': [], 'calendars': []})
                 alerts.append({'id': name + '-offline', 'severity': 'error',
                                'text': name.title() + ' unavailable', 'view': name,
                                'detail': 'Retry in ' + name.title()})
-        return values['calendar'], values['weather'], alerts
+        return values['calendar'], values['weather'], values['shopping'], alerts
 
     def status(self):
         t = now()
@@ -281,6 +288,8 @@ class Hub:
             next(source for source in sources if source['id'] == 'photos').update(self.photos.status())
         if self.weather_provider is not None:
             next(source for source in sources if source['id'] == 'weather').update(self.weather_provider.health)
+        if self.shopping_bridge is not None:
+            next(source for source in sources if source['id'] == 'shopping').update(self.shopping_bridge.health)
         return {'sources': sources}
 
     def home_data(self):
@@ -449,16 +458,16 @@ def make_handler(hub, allowed, token=None):
                 if path == '/api/today':
                     t = now()
                     day = t.replace(hour=0, minute=0, second=0, microsecond=0)
-                    calendar, weather, source_alerts = hub.today_sources(day)
+                    calendar, weather, shopping, source_alerts = hub.today_sources(day)
                     events = [e for e in calendar['events']
                               if not e['allDay'] and datetime.fromisoformat(e['end']) > t
                               and datetime.fromisoformat(e['start']) < t + timedelta(days=1)][:4]
-                    shop = [i for i in hub.shopping()['items'] if not i['done']]
+                    shop = [i for i in shopping['items'] if not i['done']]
                     shop.sort(key=lambda i: i['created'], reverse=True)
                     q = QUOTES[t.toordinal() % len(QUOTES)]
                     self.reply({'source': 'local' if hub.integrations is not None else 'sample',
                                 'calendarSource': calendar.get('source'), 'now': iso(t), 'events': events, 'calendars': calendar['calendars'],
-                                'shoppingOpen': len(shop), 'shoppingTop': shop[:3], 'quote': q,
+                                'shoppingSource': shopping.get('source'), 'shoppingOpen': len(shop), 'shoppingTop': shop[:3], 'quote': q,
                                 'weather': weather, 'alerts': hub.alerts() + source_alerts})
                 elif path == '/api/calendar':
                     start = datetime.fromisoformat(params['from'])
@@ -522,7 +531,10 @@ def make_handler(hub, allowed, token=None):
                     name, qty, category, notes = clean_item(body)
                     item = {'id': uuid.uuid4().hex[:12], 'name': name, 'qty': qty, 'category': category,
                             'notes': notes, 'done': False, 'created': iso(now())}
-                    self.reply(hub.mutate_shopping(lambda items: items.append(item)))
+                    result = hub.mutate_shopping(lambda items: items.append(item), body.get('requestKey'))
+                    if hub.shopping_bridge is None:
+                        result = dict(result, addedId=item['id'])
+                    self.reply(result)
                 elif self.path == '/api/shopping/clear':
                     self.reply(hub.mutate_shopping(lambda items: items.__setitem__(slice(None), [i for i in items if not i['done']])))
                 elif self.path == '/api/home/action':
@@ -603,9 +615,11 @@ def main():
         args.allow = network.get('allow', args.allow)
     allowed = [ipaddress.ip_network(a, strict=False) for a in args.allow]
     token = None if args.no_token or not allowed else load_token(args.token_file)
-    hub = Hub(Store(DATA), from_config(config),
+    store, ha = Store(DATA), from_config(config)
+    shopping = ShoppingBridge(ha, store, CATEGORIES, QUICK_ADD) if ha is not None and config.get('shopping', {}).get('source') == 'homeassistant' else None
+    hub = Hub(store, ha,
               PhotoLibrary(DATA / 'photos', enabled=config.get('photos', {}).get('source') == 'aura'),
-              Weather(config.get('weather')) if args.config else None)
+              Weather(config.get('weather')) if args.config else None, shopping)
     server = ThreadingHTTPServer((args.host, args.port), make_handler(hub, allowed, token))
     extra = ''.join(', ' + str(address) for address in allowed)
     guard = f'; LAN clients need the token in {args.token_file}' if token else ''

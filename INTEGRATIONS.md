@@ -130,6 +130,30 @@ these devices are absent: vendor LAN compatibility, power and isolation need
 checking. No camera credentials, discovery identifiers or addresses are in Git.
 No Docker network/firewall/listener changes were made.
 
+## Shared shopping
+
+The deployed tablet now uses HA's existing Shopping list for names and completion
+states, including phone-originated changes. Private config selects
+`shopping.source = homeassistant`; `local` keeps the original tablet store.
+The original local list is preserved and was not uploaded automatically.
+Quantity, category and notes remain tablet-local metadata because the native HA
+Shopping list does not provide those fields. Phone additions default to Other.
+
+Reads refresh within fifteen seconds on the backend and on the UI's normal poll.
+Writes require readback. Creates use a browser request key and bounded durable
+receipts; an ambiguous create is never blindly repeated. An unresolved receipt
+blocks further adds until its outcome is established from HA, rather than risking
+duplicates. This is not an automatic offline-write queue: failed writes remain
+unconfirmed and the UI offers Retry. The browser's last-good list stays stale
+when HA is offline. Original local storage is a separate fallback source.
+Delete Undo uses the returned item ID, retains its create key, and provides an
+actual persistent Retry action if restoration fails. Concurrent phone edits do
+not cause Undo to complete another item.
+
+Live create, completion and deletion readbacks passed using one synthetic item;
+only that test item was removed. Actual iPhone-app acceptance still needs the
+owner to open HA Shopping and make an edit from that phone.
+
 ## Photos
 
 The owner selected Aura support and requested protocol reverse engineering.
@@ -145,7 +169,7 @@ rollback and acceptance: [`docs/aura-protocol.md`](docs/aura-protocol.md).
 
 ## Verification
 
-53 backend/image/HTTP/weather tests pass under the dedicated Aura runtime, with no skips.
+61 backend/image/HTTP/weather/shopping tests pass under the dedicated Aura runtime, with no skips.
 The existing desktop Chromium suite and new `tests/ui-aura.cjs` both pass. A separate
 1280×800 empty-integration check covers Setup needed, no fake events/devices,
 and Not connected timestamps. The physical frame displays its sample screensaver
@@ -162,3 +186,18 @@ References: [HA CalDAV](https://www.home-assistant.io/integrations/caldav/),
 [HA TP-Link](https://www.home-assistant.io/integrations/tplink/),
 [HA Twinkly](https://www.home-assistant.io/integrations/twinkly/),
 [HA Govee local](https://www.home-assistant.io/integrations/govee_light_local/).
+
+## Reboot and camera follow-up
+
+The tablet reboot returned to its kiosk automatically, but DHCP assigned a new
+address. The exact frame /32 admission was updated privately and authenticated
+Wi-Fi calendar/weather/light reads passed again. This proves the address-reservation
+gate matters: stable frame reservation is still awaiting owner confirmation.
+No subnet-wide admission or firewall widening was used to conceal the problem.
+
+The C110 TP-Link cloud authentication continues to fail despite owner-confirmed
+compatibility and account ownership. The wizard later reported DEVICE_BLOCKED
+for about thirty minutes; stop blind retries. Owner enabled Camera Account;
+targeted checks then found both ONVIF2020 and RTSP554 reachable. The official HA
+ONVIF form is prepared for local Camera Account entry, with no successful camera
+authentication or dashboard video acceptance claimed yet. No reset was performed.

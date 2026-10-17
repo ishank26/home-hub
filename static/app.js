@@ -279,7 +279,14 @@
         : `In ${Math.floor(mins / 60)}h ${mins % 60}m`;
   }
 
+  function shoppingRequestKey() {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+  }
+
   async function request(path, method = "GET", body) {
+    if (method === "POST" && path === "/api/shopping" && body && !body.requestKey)
+      body.requestKey = shoppingRequestKey();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 8000);
     try {
@@ -449,7 +456,7 @@
     }
   }
   const current = (gen) => gen === state.generation && state.mode === "active";
-  function toast(text, undo = null) {
+  function toast(text, undo = null, actionLabel = "Undo", duration = 5000) {
     clearTimeout(toastTimer);
     const old = $(".toast");
     if (old) old.remove();
@@ -459,13 +466,13 @@
     el.setAttribute("role", "status");
     renderHTML(
       el,
-      `<span>${esc(text)}</span>${undo ? button("Undo", "undo", "") : ""}`,
+      `<span>${esc(text)}</span>${undo ? button(actionLabel, "undo", "") : ""}`,
     );
     stage.appendChild(el);
-    toastTimer = setTimeout(() => {
+    toastTimer = duration ? setTimeout(() => {
       el.remove();
       toastUndo = null;
-    }, 5000);
+    }, duration) : null;
   }
   function modal(title, body) {
     closeModal();
@@ -507,7 +514,7 @@
     frame(
       "Today",
       result,
-      `<div class="today-top"><div><div class="clock-big" data-clock></div><div class="date-big" data-date></div></div>${button(`<span style="font-size:64px" aria-hidden="true">${wxIcon(w.kind, 64)}</span><span><span class="t">${temp(w.temp)}</span><br><span class="s">${esc(w.summary)} · H ${temp(d.weather.daily[0]?.hi)} L ${temp(d.weather.daily[0]?.lo)}</span><br><span class="r">${esc(rainWindow(d.weather))}</span></span>`, "nav:weather", "wx-tile")}</div><div class="today-grid"><article class="card"><div class="card-head"><h2>Next up</h2>${button("Calendar ›", "nav:calendar", "link")}</div>${d.events.length ? d.events.map((e) => `<button class="ev-row item" data-action="event:${esc(e.id)}"><span class="time">${esc(time(e.start))}</span><i class="dot d-${color(e.calendar, d.calendars)}"></i><span class="title">${esc(e.title)}<span>${esc((d.calendars.find((c) => c.id === e.calendar) || {}).name)}</span></span><span class="pill ${d.events[0] === e ? "hot" : ""}" data-relative="${esc(e.id)}">${relative(e.start, e.end)}</span></button>`).join("") : `<div class="empty">${d.calendarSource === 'unconfigured' ? 'Calendar needs setup' : d.calendarSource === 'failed' ? 'Calendar unavailable' : 'Nothing coming up'}</div>`}</article><article class="card today-shopping" data-action="nav:shopping"><div class="card-head"><h2>Shopping</h2>${button("Open list ›", "nav:shopping", "link")}</div><div class="shop-count">${d.shoppingOpen} <span>open items</span></div>${d.shoppingTop.map((i) => `<div class="mini-row row-line">${esc(i.name)}<span>${esc(i.qty)}</span></div>`).join("")}${d.shoppingOpen > 3 ? `<p class="meta">+ ${d.shoppingOpen - 3} more</p>` : ""}</article></div>${button(`<q>${esc(d.quote.text)}</q><span>— ${esc(d.quote.author)}</span>`, "nav:quotes", "quote-line")}`,
+      `<div class="today-top"><div><div class="clock-big" data-clock></div><div class="date-big" data-date></div></div>${button(`<span style="font-size:64px" aria-hidden="true">${wxIcon(w.kind, 64)}</span><span><span class="t">${temp(w.temp)}</span><br><span class="s">${esc(w.summary)} · H ${temp(d.weather.daily[0]?.hi)} L ${temp(d.weather.daily[0]?.lo)}</span><br><span class="r">${esc(rainWindow(d.weather))}</span></span>`, "nav:weather", "wx-tile")}</div><div class="today-grid"><article class="card"><div class="card-head"><h2>Next up</h2>${button("Calendar ›", "nav:calendar", "link")}</div>${d.events.length ? d.events.map((e) => `<button class="ev-row item" data-action="event:${esc(e.id)}"><span class="time">${esc(time(e.start))}</span><i class="dot d-${color(e.calendar, d.calendars)}"></i><span class="title">${esc(e.title)}<span>${esc((d.calendars.find((c) => c.id === e.calendar) || {}).name)}</span></span><span class="pill ${d.events[0] === e ? "hot" : ""}" data-relative="${esc(e.id)}">${relative(e.start, e.end)}</span></button>`).join("") : `<div class="empty">${d.calendarSource === 'unconfigured' ? 'Calendar needs setup' : d.calendarSource === 'failed' ? 'Calendar unavailable' : 'Nothing coming up'}</div>`}</article><article class="card today-shopping" data-action="nav:shopping"><div class="card-head"><h2>Shopping</h2>${button("Open list ›", "nav:shopping", "link")}</div><div class="shop-count">${d.shoppingSource === "failed" ? "—" : d.shoppingOpen} <span>${d.shoppingSource === "failed" ? "Shopping unavailable" : "open items"}</span></div>${d.shoppingTop.map((i) => `<div class="mini-row row-line">${esc(i.name)}<span>${esc(i.qty)}</span></div>`).join("")}${d.shoppingOpen > 3 ? `<p class="meta">+ ${d.shoppingOpen - 3} more</p>` : ""}</article></div>${button(`<q>${esc(d.quote.text)}</q><span>— ${esc(d.quote.author)}</span>`, "nav:quotes", "quote-line")}`,
     );
     updateClocks();
     later(updateClocks, 1000);
@@ -702,7 +709,7 @@
     if (expanded) $(".completed-group").open = true;
     if (state.shoppingBusy.size) $("#add-form button").disabled = true;
     $(".head .sub").textContent =
-      `${d.items.filter((i) => !i.done).length} open · ${result.stale ? "Offline copy" : "Saved locally"} ${time(result.at)}`;
+      `${d.items.filter((i) => !i.done).length} open · ${result.stale ? "Offline copy" : d.source === "homeassistant" ? "Synced with Home Assistant" : "Saved locally"} ${time(result.at)}`;
   }
   async function shopping(gen) {
     const r = await request("/api/shopping");
@@ -712,6 +719,13 @@
     if (state.shoppingBusy.size) return;
     id = id || "__list";
     const gen = state.generation;
+    if (method === "POST" && path === "/api/shopping" && !body.requestKey) {
+      const fingerprint = JSON.stringify(body);
+      if (!state.pendingShoppingAdd || state.pendingShoppingAdd.fingerprint !== fingerprint) {
+        state.pendingShoppingAdd = {fingerprint, key: shoppingRequestKey()};
+      }
+      body.requestKey = state.pendingShoppingAdd.key;
+    }
     if (id) {
       state.shoppingBusy.add(id);
       state.shoppingErrors.delete(id);
@@ -723,6 +737,7 @@
       state.shopping = r;
       if (id) state.shoppingErrors.delete(id);
       if (undo) toast("Item deleted", undo);
+      if (method === "POST" && path === "/api/shopping") state.pendingShoppingAdd = null;
       if (method === "POST" && path === "/api/shopping" && current(gen)) {
         const form = $("#add-form");
         if (form) form.reset();
@@ -1205,7 +1220,7 @@
         try {
           await fn();
         } catch {
-          toast("Undo not confirmed · Retry");
+          toast("Undo not confirmed", fn, "Retry", 0);
         }
       }
       return;
@@ -1274,21 +1289,25 @@
     }
     if (kind === "delete") {
       const i = state.shopping.data.items.find((i) => i.id === arg);
+      const restoreKey = shoppingRequestKey();
+      let restoredId = null;
       return shoppingWrite(
         "/api/shopping/" + arg,
         "DELETE",
         {},
         arg,
         async () => {
-          let r = await request("/api/shopping", "POST", {
+          let r = restoredId ? await request("/api/shopping") : await request("/api/shopping", "POST", {
             name: i.name,
             qty: i.qty,
             notes: i.notes || "",
             category: i.category,
+            requestKey: restoreKey,
           });
+          restoredId = restoredId || r.data.addedId;
+          if (!restoredId) throw new Error("Restored item not confirmed");
           if (i.done) {
-            const restored = r.data.items[r.data.items.length - 1];
-            r = await request("/api/shopping/" + restored.id, "PATCH", {
+            r = await request("/api/shopping/" + restoredId, "PATCH", {
               done: true,
             });
           }

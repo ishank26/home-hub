@@ -273,7 +273,7 @@ confirmed creating the dedicated homehub user. Aura login is explicitly deferred
 Real server-side Open-Meteo weather is configured privately and verified over the
 frame Wi-Fi link; twelve-hour/seven-day data and model-estimate labels replace
 sample weather. Today isolates slow source failures within a 4.5-second wait;
-53 backend tests and both browser suites pass, with independent review approval.
+61 backend tests and both browser suites pass, with independent review approval.
 Twinkly enrolled in HA and its light is selected privately; two C110 cameras need
 Tapo authentication. Three Deco nodes also discovered. No H100 or Govee response;
 no device reset, custom integration or HA network exposure change.
@@ -282,6 +282,20 @@ Dedicated HA token entry succeeded; both selected calendars return real events
 and Twinkly is available. Tablet reboot completed and kiosk resumed automatically.
 Remaining: final family-device acceptance; Tapo camera login and exact stream support; H100/T110 availability,
 pairing and physical contact test; Govee LAN compatibility; Aura login/first sync;
-HA-backed phone shopping synchronization; selected scenes and weather alerts;
+actual iPhone shopping acceptance; selected scenes and weather alerts;
 DHCP/restart/soak acceptance. Shopping currently persists locally. Do not claim
 all integrations are functional until these gates pass.
+
+
+Shared HA Shopping is implemented, reviewed and enabled. Names/checkmarks sync;
+quantity/category/notes remain local. Original local list retained without upload.
+Ambiguous creates keep durable receipts and are not repeated blindly. Undo uses
+explicit restored IDs and real persistent Retry, with concurrent phone edits
+covered by tests. Live synthetic add/complete/remove passed and cleaned only its
+own item. No automatic offline-write queue is claimed.
+Tablet reboot auto-launch passed, but address changed: private exact /32 repaired,
+Wi-Fi reads passed, owner Deco reservation requested and not yet confirmed.
+C110 cloud login hit a thirty-minute DEVICE_BLOCKED response; no more blind retries.
+Owner enabled Camera Account; local2020/554 ports now reachable. ONVIF form is
+prepared for owner-local camera credentials after block recovery. No camera feed
+or snapshot proxy has been enabled yet. Aura remains explicitly deferred.

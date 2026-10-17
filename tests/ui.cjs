@@ -214,6 +214,36 @@ const { chromium } = require("playwright");
           .querySelector(".completed-group .item")
           ?.getAttribute("aria-pressed") === "true",
     );
+    // Undo must retry with the same create key and complete the restored ID,
+    // even when a concurrent phone edit becomes the final item in the list.
+    if ((await page.locator('.completed-group').getAttribute('open')) === null)
+      await page.locator('.completed-group summary').click();
+    await row.locator('.delete-item').click();
+    await page.getByText('Item deleted', {exact:true}).waitFor();
+    const restoreKeys = [];
+    let restoredId, phoneId;
+    await page.route('**/api/shopping', async route => {
+      if (route.request().method() !== 'POST') return route.continue();
+      restoreKeys.push(route.request().postDataJSON().requestKey);
+      if (restoreKeys.length === 1) return route.abort();
+      const response = await route.fetch();
+      restoredId = (await response.json()).addedId;
+      const phone = await context.request.post(base + '/api/shopping', {data:{name:'Concurrent phone item'}});
+      phoneId = (await phone.json()).addedId;
+      const list = await (await context.request.get(base + '/api/shopping')).json();
+      await route.fulfill({json:{...list, addedId:restoredId}});
+    });
+    await page.locator('.toast [data-action="undo"]').click();
+    await page.getByText('Undo not confirmed', {exact:true}).waitFor();
+    await page.clock.runFor(6000);
+    await page.locator('.toast').getByRole('button', {name:'Retry',exact:true}).click();
+    await page.getByText('Item restored', {exact:true}).waitFor();
+    await page.unroute('**/api/shopping');
+    assert.equal(restoreKeys.length, 2);
+    assert.equal(restoreKeys[0], restoreKeys[1]);
+    const shared = await (await context.request.get(base + '/api/shopping')).json();
+    assert.equal(shared.items.find(i => i.id === restoredId).done, true);
+    assert.equal(shared.items.find(i => i.id === phoneId).done, false);
     await fits();
     await nav("weather");
     await page.locator(".day7").first().waitFor();

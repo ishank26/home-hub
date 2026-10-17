@@ -139,7 +139,8 @@ rules and scanners reduce mistakes; they cannot guarantee detection of every
 possible secret. Keep the repository private.
 
 Next setup steps: authenticate the Aura mirror and finish the remaining device enrollment. HA to-do with an offline queue is
-still planned; shopping currently uses a local store.
+still planned. The deployed Shopping list now shares names/checkmarks with HA;
+quantity, notes and category remain local. The original local list is retained.
 
 ## Frame kiosk (USB)
 
@@ -181,5 +182,5 @@ and the mirror picks them up after sync. [Protocol and operation](docs/aura-prot
 
 Full backend/image tests: `~/.local/share/home-hub/aura-venv/bin/python -m unittest discover -s tests -v`.
 The normal stdlib-only test run skips the five Pillow-dependent test methods when
-Pillow is absent; the dedicated-runtime verification now runs 53 tests with no skips.
+Pillow is absent; the dedicated-runtime verification now runs 61 tests with no skips.
 Photo browser flow: `NODE_PATH=/tmp/home-hub-browser/node_modules node tests/ui-aura.cjs`.
