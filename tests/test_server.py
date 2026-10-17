@@ -173,6 +173,21 @@ class ServerTests(unittest.TestCase):
         sources = self.api('/api/status')['sources']
         self.assertEqual(next(s for s in sources if s['id'] == 'photos')['state'], 'stale')
 
+    def test_camera_snapshot_route_stays_authenticated_and_uncached(self):
+        from integrations import HomeAssistant
+        self.hub.integrations = HomeAssistant({'cameras': [{'entity': 'camera.test'}]}, 'synthetic-camera-token')
+        alias = self.hub.integrations.alias('camera.test')
+        with patch.object(self.hub.integrations, 'camera_image', return_value=b'jpeg-image') as camera:
+            status, headers, raw = self.request('/camera/' + alias + '.jpg')
+            self.assertEqual((status, headers['Content-Type'], raw), (200, 'image/jpeg', b'jpeg-image'))
+            self.assertEqual(headers['Cache-Control'], 'no-store')
+            camera.assert_called_once_with(alias)
+            with patch.object(self.handler, 'allowed', return_value=False):
+                denied = object.__new__(self.handler)
+                denied.path = '/camera/' + alias + '.jpg'
+                denied.do_GET()
+            camera.assert_called_once_with(alias)
+
     def test_allowlist_policy(self):
         # A synthetic handler avoids depending on this host's LAN interfaces.
         for networks, peer, expected in [([], '127.0.0.1', True), ([], '::1', True),

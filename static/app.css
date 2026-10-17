@@ -200,6 +200,12 @@ select:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); 
 .cam { border-radius: 18px; background: #3A4549; color: #FFFFFF; display: flex; flex-direction: column; justify-content: space-between; padding: 14px 16px; }
 .cam .tag { align-self: flex-start; padding: 4px 12px; border-radius: 999px; background: rgba(15,20,22,.7); font-size: 18px; font-weight: 700; }
 .cam .note { font-size: 17px; color: #E4E8EA; }
+.cams { overflow-y: auto; grid-auto-rows: minmax(140px, 1fr); }
+button.cam { border: 0; text-align: left; position: relative; overflow: hidden; min-height: 140px; }
+.cam img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cam .tag, .cam .camera-note { position: relative; z-index: 1; }
+.cam .camera-note { background: rgba(15,20,22,.85); padding: 4px 8px; border-radius: 8px; }
+.camera-frame img { width: 100%; max-height: 400px; object-fit: contain; background: #0E1012; }
 .pending { border-radius: 18px; border: 2px dashed #C9C4B8; background: #F3F1EC; display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 18px 20px; }
 .pending b { font-size: 21px; } .pending span { font-size: 18px; color: #3A4048; }
 .toast { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); display: flex; align-items: center; gap: 18px; min-height: 60px; padding: 0 12px 0 22px; border-radius: 16px; background: var(--ink); color: #FFFFFF; font-size: 20px; box-shadow: 0 8px 24px rgba(0,0,0,.18); z-index: 15; }

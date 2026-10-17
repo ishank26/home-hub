@@ -9,7 +9,8 @@
     "url": "http://127.0.0.1:8123",
     "calendars": [],
     "lights": [],
-    "contacts": []
+    "contacts": [],
+    "cameras": []
   },
   "weather": {
     "latitude": 0.0,

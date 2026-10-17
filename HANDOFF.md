@@ -18,6 +18,18 @@ holds every credential.
 | Reference repo | [wesbos/photo-frame-dashboard](https://github.com/wesbos/photo-frame-dashboard), inspected at `9dd323e`. Useful parts: `docs/pf1007l-start-here.md` (frame access tests), `docs/allwinner-a33-pf1007l.md` (WebView 106, kiosk, memory), `docs/aimor-remote-root-shell.md` (**read first**), and `dashboard/` (a Vite UI; not reused, because this project has no build step). |
 | Server context | `/home/ishank/work/home-server/MEMORY.md`, `/home/ishank/work/maxcaddy/AGENTS.md`: Home Assistant runs on a private bridge with a loopback UI. Camera, person, audio and location data must never enter the Hermes assistant. |
 
+## Current checkpoint — 2026-10-17
+
+Live: selected iCloud calendars, Open-Meteo weather, shared HA Shopping, Twinkly
+light and one local ONVIF C110 camera selection. Dedicated homehub credentials,
+source isolation, mutation readback and publication guards are installed. Camera
+snapshots pass real HA fetch and synthetic browser privacy/resource checks.
+See INTEGRATIONS.md for precise evidence and limitations; older state below is
+historical. Owner deferred Aura sign-in. Remaining acceptance: Deco address
+reservations, additional camera/device credentials and supported LAN setup,
+physical privacy/contact tests, phone shopping edit, host reboot and multi-day
+soak. GitHub privacy restoration awaits owner authentication; do not claim private.
+
 ## Current state (verified 2026-10-12)
 
 **2026-10-15 update (supersedes the historical table below):** the PF1007L April

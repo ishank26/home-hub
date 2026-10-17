@@ -322,6 +322,10 @@
     return id;
   }
   function clearView() {
+    cameraLoads.forEach(controller => controller.abort());
+    cameraLoads.clear();
+    cameraObjectURLs.forEach(url => URL.revokeObjectURL(url));
+    cameraObjectURLs.clear();
     state.timers.forEach(clearInterval);
     state.timers = [];
     clearTimeout(hintTimer);
@@ -484,6 +488,7 @@
     $('[data-action="close"]', overlay).focus();
   }
   function closeModal() {
+    clearCameraImages(overlay);
     if (modalFocus) {
       renderHTML(overlay, "");
       if (modalFocus.isConnected) modalFocus.focus();
@@ -847,21 +852,91 @@
     $('[data-action="close"]', overlay).focus();
   }
 
+  const cameraObjectURLs = new Set(), cameraLoads = new Set(), cameraControllers = new WeakMap();
+  function clearCameraImage(img) {
+    cameraControllers.get(img)?.abort();
+    if (img.dataset.objectUrl) {
+      URL.revokeObjectURL(img.dataset.objectUrl);
+      cameraObjectURLs.delete(img.dataset.objectUrl);
+      delete img.dataset.objectUrl;
+    }
+    img.removeAttribute('src');
+  }
+  function clearCameraImages(root) {
+    root.querySelectorAll('[data-camera-id]').forEach(clearCameraImage);
+  }
+  async function refreshCamera(img) {
+    if (img.dataset.busy || !/^[a-f0-9]{16}$/.test(img.dataset.cameraId || '')) return;
+    img.dataset.busy = '1';
+    const gen = state.generation, controller = new AbortController();
+    cameraLoads.add(controller);
+    cameraControllers.set(img, controller);
+    const timer = setTimeout(() => controller.abort(), 7000);
+    let objectUrl;
+    const note = img.closest('.cam, .camera-frame')?.querySelector('.camera-note');
+    try {
+      const response = await fetch(`/camera/${img.dataset.cameraId}.jpg`, {signal:controller.signal, credentials:'same-origin', cache:'no-store'});
+      if (response.status === 410) {
+        clearCameraImage(img);
+        if (note) note.textContent = 'Camera unavailable';
+        return;
+      }
+      if (!response.ok || !response.headers.get('content-type')?.startsWith('image/jpeg')) throw new Error('Snapshot unavailable');
+      const blob = await response.blob();
+      if (blob.size > 2000000) throw new Error('Snapshot too large');
+      objectUrl = URL.createObjectURL(blob);
+      const image = new Image();
+      await new Promise((resolve, reject) => {image.onload=resolve;image.onerror=reject;image.src=objectUrl;});
+      if (!img.isConnected || gen !== state.generation || controller.signal.aborted) return;
+      if (img.dataset.objectUrl) {
+        URL.revokeObjectURL(img.dataset.objectUrl);
+        cameraObjectURLs.delete(img.dataset.objectUrl);
+      }
+      img.src = objectUrl;
+      img.dataset.objectUrl = objectUrl;
+      cameraObjectURLs.add(objectUrl);
+      objectUrl = null;
+      if (note) note.textContent = 'Snapshot loaded ' + time(Date.now());
+    } catch {
+      if (img.isConnected && note) note.textContent = img.dataset.objectUrl ? 'Update failed · previous snapshot' : 'Snapshot unavailable';
+    } finally {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      clearTimeout(timer);
+      cameraLoads.delete(controller);
+      if (cameraControllers.get(img) === controller) cameraControllers.delete(img);
+      delete img.dataset.busy;
+    }
+  }
+  function refreshCameras() {
+    document.querySelectorAll('[data-camera-id]').forEach(img => refreshCamera(img));
+  }
+  function cameraViewer(index) {
+    const camera = state.home?.data.cameras[index];
+    if (!camera || camera.available === false || state.home.stale) return;
+    modal(camera.name, `<div class="camera-frame"><img data-camera-id="${esc(camera.id)}" alt="Camera snapshot"><p class="camera-note">Loading snapshot…</p></div><p class="meta">Snapshots refresh every 30 seconds. This is not continuous video.</p>`);
+    refreshCameras();
+  }
   async function home(gen) {
     const r = await request("/api/home");
     if (current(gen)) {
       state.home = r;
       drawHome();
+      if (state.cameraRefreshGen !== gen) {
+        state.cameraRefreshGen = gen;
+        later(refreshCameras, 30000);
+      }
     }
   }
   function drawHome() {
+    clearCameraImages(main);
     const r = state.home,
       d = r.data;
     frame(
       "Smart Home",
       r,
-      `<div class="status-row">${d.contacts.map((c) => `<div class="contact ${c.open ? "open" : ""}"><i class="dot ${c.open ? "warn" : ""}"></i>${esc(c.name)} · ${c.available === false ? "Unavailable" : c.open ? "Open" + (c.openMinutes ? " " + c.openMinutes + " min" : "") : "Closed"}</div>`).join("")}<span class="meta">${esc(d.hub.name)} · ${d.hub.online ? "Online" : "Unavailable"}</span></div><div class="scenes">${d.scenes.map((s, i) => button(state.homeBusy ? "Sending…" : esc(s.name), `scene:${i}`, i === 2 ? "off" : "", state.homeBusy || r.stale ? "disabled" : "")).join("")}</div><div class="lights">${d.lights.map((l, i) => button(`<span class="top"><span>${svg(bulb, 30)}</span><span>${l.available === false ? "Unavailable" : state.homeBusy ? "Sending…" : l.on ? "On" : "Off"}</span></span><span class="n">${esc(l.name)}</span><span class="d">${esc(l.detail)}${l.on && l.brightness != null ? " · " + l.brightness + "%" : ""}</span>`, `light:${i}`, `light ${state.homeBusy ? "busy" : ""}`, `aria-pressed="${l.on}" ${state.homeBusy || r.stale || l.available === false ? "disabled" : ""}`)).join("")}</div><div class="cams">${d.cameras.map((c) => `<article class="cam"><span class="tag">${esc(c.name)}</span><span class="note">Sample placeholder · no live camera connected</span></article>`).join("")}<article class="pending"><b>${esc(d.doorbell.name)}</b><span>${d.doorbell.verified ? "Verified · video unavailable" : "Pending verification"}</span></article></div>`,
+      `<div class="status-row">${d.contacts.map((c) => `<div class="contact ${c.open ? "open" : ""}"><i class="dot ${c.open ? "warn" : ""}"></i>${esc(c.name)} · ${c.available === false ? "Unavailable" : c.open ? "Open" + (c.openMinutes ? " " + c.openMinutes + " min" : "") : "Closed"}</div>`).join("")}<span class="meta">${esc(d.hub.name)} · ${d.hub.online ? "Online" : "Unavailable"}</span></div><div class="scenes">${d.scenes.map((s, i) => button(state.homeBusy ? "Sending…" : esc(s.name), `scene:${i}`, i === 2 ? "off" : "", state.homeBusy || r.stale ? "disabled" : "")).join("")}</div><div class="lights">${d.lights.map((l, i) => button(`<span class="top"><span>${svg(bulb, 30)}</span><span>${l.available === false ? "Unavailable" : state.homeBusy ? "Sending…" : l.on ? "On" : "Off"}</span></span><span class="n">${esc(l.name)}</span><span class="d">${esc(l.detail)}${l.on && l.brightness != null ? " · " + l.brightness + "%" : ""}</span>`, `light:${i}`, `light ${state.homeBusy ? "busy" : ""}`, `aria-pressed="${l.on}" ${state.homeBusy || r.stale || l.available === false ? "disabled" : ""}`)).join("")}</div><div class="cams">${d.cameras.map((c, i) => d.source === 'homeassistant' ? button(`<span class="tag">${esc(c.name)}</span>${c.available && !r.stale ? `<img data-camera-id="${esc(c.id)}" alt="Camera snapshot">` : ''}<span class="note camera-note">${r.stale ? 'State stale · open Smart Home to retry' : c.available ? 'Loading snapshot…' : 'Camera unavailable'}</span>`, `camera:${i}`, 'cam', c.available && !r.stale ? '' : 'disabled') : `<article class="cam"><span class="tag">${esc(c.name)}</span><span class="note">Sample placeholder · no live camera connected</span></article>`).join("")}<article class="pending"><b>${esc(d.doorbell.name)}</b><span>${d.doorbell.verified ? "Verified · video unavailable" : "Pending verification"}</span></article></div>`,
     );
+    refreshCameras();
   }
   async function homeCommand(commands, undo = null) {
     if (state.homeBusy) return;
@@ -1226,6 +1301,7 @@
       return;
     }
     if (kind === "event") return eventDetail(arg);
+    if (kind === "camera") return cameraViewer(Number(arg));
     if (kind === "monthday") {
       const day = new Date(Number(arg)),
         events = state.calendar.data.events.filter(

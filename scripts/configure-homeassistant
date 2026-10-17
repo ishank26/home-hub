@@ -37,7 +37,7 @@ def main():
     if not token:
         raise SystemExit('No token supplied; nothing changed.')
     ha = dict(config.get('homeassistant', {}))
-    for kind, domain in [('calendars', 'calendar'), ('lights', 'light'), ('contacts', 'binary_sensor')]:
+    for kind, domain in [('calendars', 'calendar'), ('lights', 'light'), ('contacts', 'binary_sensor'), ('cameras', 'camera')]:
         print(f'Use exact {domain} entity IDs from HA Settings → Devices & services → Entities.')
         text = input(f'{kind}: comma-separated IDs (blank keeps the existing selection): ').strip()
         if text:

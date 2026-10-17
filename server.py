@@ -29,7 +29,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs
 
-from integrations import SourceUnavailable, from_config, private_json
+from integrations import CameraInactive, SourceUnavailable, from_config, private_json
 from photos import PhotoLibrary
 from weather import Weather, empty_weather
 from shopping import ShoppingBridge
@@ -414,7 +414,7 @@ def make_handler(hub, allowed, token=None):
             self.end_headers()
 
         def end_headers(self):
-            self.send_header('Cache-Control', 'no-store' if self.path.startswith(('/api/', '/pair')) else 'max-age=300')
+            self.send_header('Cache-Control', 'no-store' if self.path.startswith(('/api/', '/pair', '/camera/')) else 'max-age=300')
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('Referrer-Policy', 'no-referrer')
             super().end_headers()
@@ -509,6 +509,15 @@ def make_handler(hub, allowed, token=None):
                     self.wfile.write(raw)
                 elif path == '/api/home':
                     self.reply(hub.home_data())
+                elif match := re.fullmatch(r'/camera/([a-f0-9]{16})\.jpg', path):
+                    if hub.integrations is None:
+                        return self.reply({'error': 'not found'}, 404)
+                    raw = hub.integrations.camera_image(match[1])
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'image/jpeg')
+                    self.send_header('Content-Length', str(len(raw)))
+                    self.end_headers()
+                    self.wfile.write(raw)
                 elif path == '/api/settings':
                     self.reply(hub.settings())
                 elif path == '/api/status':
@@ -518,7 +527,7 @@ def make_handler(hub, allowed, token=None):
                 else:
                     super().do_GET()
             except SourceUnavailable as error:
-                self.reply({'error': str(error)}, 503)
+                self.reply({'error': str(error)}, 410 if isinstance(error, CameraInactive) else 503)
             except (KeyError, ValueError):
                 self.reply({'error': 'bad request'}, 400)
 

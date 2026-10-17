@@ -51,6 +51,8 @@ Three local OFL font faces are in `static/fonts/`, with licenses and provenance.
 - Photo filters, fullscreen viewer and two-layer crossfade slideshow.
 - Sample home contacts/scenes/lights, pending doorbell, honest camera placeholders;
   command confirmation and five-second Undo. Stale home controls are disabled.
+  Live allowlisted HA cameras show bounded JPEG snapshots with an enlarged viewer,
+  thirty-second refresh, outage labels and off-state image clearing.
 - Persisted display/quiet-hour settings, source Retry, diagnostics and a two-finger
   three-second admin hold. Admin currently explains server setup; it does not exit
   Android or expose credentials.
@@ -64,7 +66,7 @@ Quiet hours select night mode when idle; physical brightness needs the later kio
 integration. Wake always restarts the idle timer.
 
 All API text is escaped before rendering, with a second HTML/attribute allowlist.
-Only same-origin opaque photo routes are allowed as image sources. The browser
+Only same-origin opaque photo routes and fetched camera blob URLs are allowed as image sources. The browser
 never talks directly to Home Assistant, Aura or Google.
 
 ## Tests
@@ -182,5 +184,7 @@ and the mirror picks them up after sync. [Protocol and operation](docs/aura-prot
 
 Full backend/image tests: `~/.local/share/home-hub/aura-venv/bin/python -m unittest discover -s tests -v`.
 The normal stdlib-only test run skips the five Pillow-dependent test methods when
-Pillow is absent; the dedicated-runtime verification now runs 61 tests with no skips.
+Pillow is absent; the dedicated-runtime verification now runs 69 tests with no skips.
 Photo browser flow: `NODE_PATH=/tmp/home-hub-browser/node_modules node tests/ui-aura.cjs`.
+
+Camera browser flow: `NODE_PATH=/tmp/home-hub-browser/node_modules node tests/ui-camera.cjs`.

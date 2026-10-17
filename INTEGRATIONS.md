@@ -24,7 +24,9 @@ systemctl --user disable --now home-hub.service  # stop automatic serving
 
 Reserve both addresses in the router for lasting stability. DHCP reservation,
 host reboot and a multi-day soak have not been verified. A controlled tablet
-reboot on 2026-10-17 completed and the kiosk resumed automatically. The
+reboot on 2026-10-17 completed and the kiosk resumed automatically, but DHCP
+changed its address and the exact private allowlist needed repair. A reservation
+is still required before claiming unattended reboot connectivity. The
 LAN connection currently uses HTTP; cookie and IP checks do not encrypt traffic.
 Before real calendar/photos/device data are enabled, retain a trusted isolated
 network or implement and verify encrypted transport for this legacy WebView.
@@ -60,7 +62,7 @@ next-event state attribute is not used for the calendar view.
 
 `integrations.py` connects only to the existing loopback HA endpoint, disables
 environment proxies and redirects, limits response size, and accepts explicit
-calendar/light/contact entity allowlists. It does not access Hermes.
+calendar/light/contact/camera entity allowlists. It does not access Hermes.
 
 The owner resumed setup and confirmed creating the Home Hub user on 2026-10-17.
 The prepared form had username homehub, local access only on and Administrator off.
@@ -87,8 +89,8 @@ The HA CalDAV integration and dashboard credential are authenticated. Both selec
 calendars and the Twinkly light return real data; empty or unconfigured device lists
 do not contain sample household devices.
 Upstream failures use 503 so the UI labels its last-good response stale. Light
-commands require state readback to report confirmed; scenes and camera proxying
-are not implemented in the live adapter yet.
+commands require state readback to report confirmed. Allowlisted camera snapshots
+are implemented; scenes are not configured in the live adapter.
 
 ## Smart-home enrollment
 
@@ -201,3 +203,32 @@ for about thirty minutes; stop blind retries. Owner enabled Camera Account;
 targeted checks then found both ONVIF2020 and RTSP554 reachable. The official HA
 ONVIF form is prepared for local Camera Account entry, with no successful camera
 authentication or dashboard video acceptance claimed yet. No reset was performed.
+
+## Camera snapshots — 2026-10-17
+
+The owner enabled the C110 local Camera Account and completed official ONVIF
+setup in HA. One living-room camera is selected privately. A real authenticated
+snapshot returned a valid bounded JPEG. The camera's cloud TP-Link enrollment
+failed authentication and later reported a temporary lockout; ONVIF is the
+working local path. No camera password enters this repository or the dashboard.
+
+Smart Home shows snapshots and a single enlarged viewer, refreshed every thirty
+seconds while that view is open. It does not provide continuous video or audio.
+Only up to four explicit `homeassistant.cameras` entries are accepted; their
+shape matches the other entity selections. The setup helper supports cameras.
+The server fetches a fresh state and image from loopback HA, sends credentials
+only in a header, refuses redirects and caps JPEG bytes/dimensions. There is no
+server image cache or file archive. HTTP responses are private/no-store.
+
+Explicit off/unavailable states and upstream denied/disabled responses clear the
+displayed picture on the next refresh. A transport outage retains the last image
+with an explicit update-failed label. This is polling, so privacy changes are not
+instantaneous. Vendor privacy behavior still requires physical acceptance; do not
+assume every vendor setting changes HA state. Card redraws, modal closure and
+navigation abort pending loads and release blob URLs.
+
+Synthetic browser QA covers four decoded images, one viewer, repeated light-control
+redraws with bounded image URLs, temporary outages and disabled-state clearing.
+Live frame acceptance also passed: authenticated camera HTTP over Wi-Fi returned
+a JPEG, and the actual 1280 × 800 WebView rendered the card and enlarged viewer.
+Physical privacy-mode switching remains an owner acceptance test.

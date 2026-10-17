@@ -18,6 +18,10 @@ class SourceUnavailable(Exception):
     pass
 
 
+class CameraInactive(SourceUnavailable):
+    pass
+
+
 def private_json(path):
     path = Path(path)
     info = path.lstat()
@@ -49,14 +53,17 @@ class HomeAssistant:
         self.locks = {'home': threading.RLock(), 'calendar': threading.RLock()}
         self.transport = build_opener(ProxyHandler({}), NoRedirect())
         self.entries = {}
-        for kind, domain in [('calendars', 'calendar'), ('lights', 'light'), ('contacts', 'binary_sensor')]:
+        self.camera_locks = {}
+        for kind, domain in [('calendars', 'calendar'), ('lights', 'light'), ('contacts', 'binary_sensor'), ('cameras', 'camera')]:
             entries = config.get(kind, [])
-            if not isinstance(entries, list) or len(entries) > 12:
-                raise ValueError('At most twelve entities per source')
+            if not isinstance(entries, list) or len(entries) > (4 if kind == 'cameras' else 12):
+                raise ValueError('At most four cameras or twelve other entities per source')
             for entry in entries:
                 if not isinstance(entry, dict) or not re.fullmatch(domain + r'\.[a-z0-9_]+', entry.get('entity', '')):
                     raise ValueError('Invalid allowlisted entity')
             self.entries[kind] = entries
+            if kind == 'cameras':
+                self.camera_locks = {e['entity']: threading.Lock() for e in entries}
 
     def request(self, path, body=None):
         if not self.token:
@@ -145,16 +152,16 @@ class HomeAssistant:
         return self.cached('calendar', ('calendar', start.isoformat(), end.isoformat()), 300, load)
 
     def home(self):
-        if not self.token or not any(self.entries[k] for k in ('lights', 'contacts')):
+        if not self.token or not any(self.entries[k] for k in ('lights', 'contacts', 'cameras')):
             self.health['home'] = {'state': 'failed', 'updatedAt': None}
             return {'source': 'unconfigured', 'updatedAt': None, 'contacts': [], 'lights': [], 'scenes': [],
                     'cameras': [], 'doorbell': {'name': 'Doorbell', 'verified': False},
                     'hub': {'name': 'Add devices in Home Assistant', 'online': False}, 'alerts': []}
 
         def load():
-            lights, contacts = [], []
+            lights, contacts, cameras = [], [], []
             deadline = time.monotonic() + 4
-            for kind in ('lights', 'contacts'):
+            for kind in ('lights', 'contacts', 'cameras'):
                 for entry in self.entries[kind]:
                     if time.monotonic() > deadline:
                         raise SourceUnavailable('Home Assistant refresh timed out')
@@ -165,7 +172,10 @@ class HomeAssistant:
                     attrs = result.get('attributes', {})
                     item = {'id': self.alias(entity), 'name': entry.get('name', attrs.get('friendly_name', kind)),
                             'available': available}
-                    if kind == 'lights':
+                    if kind == 'cameras':
+                        item['available'] = state in ('idle', 'streaming', 'recording')
+                        cameras.append(item)
+                    elif kind == 'lights':
                         item.update(on=state == 'on', detail='Home Assistant' if available else 'Unavailable')
                         if available and isinstance(attrs.get('brightness'), (int, float)):
                             item['brightness'] = round(attrs['brightness'] / 255 * 100)
@@ -174,10 +184,35 @@ class HomeAssistant:
                         item['open'] = state == 'on' if available else None
                         contacts.append(item)
             return {'source': 'homeassistant', 'updatedAt': datetime.now().astimezone().isoformat(),
-                    'contacts': contacts, 'lights': lights, 'scenes': [], 'cameras': [], 'alerts': [],
+                    'contacts': contacts, 'lights': lights, 'scenes': [], 'cameras': cameras, 'alerts': [],
                     'doorbell': {'name': 'Doorbell', 'verified': False},
                     'hub': {'name': 'Home Assistant', 'online': True}}
         return self.cached('home', 'home', 15, load)
+
+    def camera_image(self, alias):
+        entity = next((e['entity'] for e in self.entries['cameras'] if self.alias(e['entity']) == alias), None)
+        if entity is None:
+            raise ValueError('Unknown camera')
+        if not self.token:
+            raise SourceUnavailable('Camera connection needs local setup')
+        with self.camera_locks[entity]:
+            # Never replay cached imagery across a privacy/off transition.
+            if self.read_state(entity)['state'] not in ('idle', 'streaming', 'recording'):
+                raise CameraInactive('Camera unavailable')
+            path = '/api/camera_proxy/' + quote(entity, safe='') + '?width=1280&height=800'
+            req = Request(self.url + path, headers={'Authorization': 'Bearer ' + self.token})
+            try:
+                with self.transport.open(req, timeout=4) as response:
+                    raw = response.read(2_000_001)
+                    if response.headers.get_content_type() != 'image/jpeg' or len(raw) > 2_000_000 or not bounded_jpeg(raw):
+                        raise ValueError('Invalid camera image')
+            except HTTPError as error:
+                if error.code in (401, 403, 404, 410, 503):
+                    raise CameraInactive('Camera unavailable') from None
+                raise SourceUnavailable('Camera snapshot unavailable') from None
+            except (URLError, OSError, ValueError):
+                raise SourceUnavailable('Camera snapshot unavailable') from None
+            return raw
 
     def read_state(self, entity):
         result = self.request('/api/states/' + quote(entity, safe=''))
@@ -206,6 +241,37 @@ class HomeAssistant:
                 return {'result': 'confirmed', 'message': entry.get('name', 'Light') + ' ' + target}
             finally:
                 self.cache.pop('home', None)
+
+
+def bounded_jpeg(raw):
+    """Reject oversized decode dimensions before an image reaches the old WebView."""
+    if not raw.startswith(b'\xff\xd8') or not raw.endswith(b'\xff\xd9'):
+        return False
+    pos = 2
+    while pos + 4 <= len(raw):
+        if raw[pos] != 255:
+            return False
+        while pos < len(raw) and raw[pos] == 255:
+            pos += 1
+        if pos >= len(raw):
+            return False
+        marker = raw[pos]
+        pos += 1
+        if marker in (0xDA, 0xD9):
+            return False
+        if marker == 1 or 0xD0 <= marker <= 0xD7:
+            continue
+        length = int.from_bytes(raw[pos:pos + 2], 'big')
+        if length < 2 or pos + length > len(raw):
+            return False
+        if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+            if length < 8:
+                return False
+            height = int.from_bytes(raw[pos + 3:pos + 5], 'big')
+            width = int.from_bytes(raw[pos + 5:pos + 7], 'big')
+            return 0 < width <= 1920 and 0 < height <= 1920 and width * height <= 2_073_600
+        pos += length
+    return False
 
 
 def from_config(config):
