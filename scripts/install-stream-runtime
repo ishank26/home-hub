@@ -1,0 +1,17 @@
+#!/bin/bash
+# Pinned official PyPI dependency; preserve all existing service hardening.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+VENV="$HOME/.local/share/home-hub/stream-venv"
+umask 077
+if [ ! -x "$VENV/bin/python" ]; then
+    python3 -m venv "$VENV"
+fi
+"$VENV/bin/python" -m pip install --disable-pip-version-check --require-hashes \
+    --only-binary=:all: --index-url https://pypi.org/simple -r "$ROOT/requirements-stream.txt"
+mkdir -p "$HOME/.config/systemd/user/home-hub.service.d"
+install -m 644 "$ROOT/deploy/home-hub-stream.conf" \
+    "$HOME/.config/systemd/user/home-hub.service.d/stream-runtime.conf"
+systemctl --user daemon-reload
+systemctl --user restart home-hub.service
+printf '%s\n' 'Pinned streaming runtime installed; dashboard restarted with existing access controls.'

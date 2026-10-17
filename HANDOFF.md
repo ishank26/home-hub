@@ -21,9 +21,12 @@ holds every credential.
 ## Current checkpoint — 2026-10-17
 
 Live: selected iCloud calendars, Open-Meteo weather, shared HA Shopping, Twinkly
-light and one local ONVIF C110 camera selection. Dedicated homehub credentials,
+light and two local ONVIF C110 camera selections. Dedicated homehub credentials,
 source isolation, mutation readback and publication guards are installed. Camera
 snapshots pass real HA fetch and synthetic browser privacy/resource checks.
+The enlarged viewer now plays HLS video; the physical WebView rendered moving
+video and repeated desktop playlist reloads/decoder cleanup passed. Streaming
+runtime is installed; all HA/network access controls are retained.
 See INTEGRATIONS.md for precise evidence and limitations; older state below is
 historical. Owner deferred Aura sign-in. Remaining acceptance: Deco address
 reservations, additional camera/device credentials and supported LAN setup,

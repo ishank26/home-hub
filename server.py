@@ -29,6 +29,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs
 
+from camera_stream import LiveCamera
 from integrations import CameraInactive, SourceUnavailable, from_config, private_json
 from photos import PhotoLibrary
 from weather import Weather, empty_weather
@@ -202,6 +203,7 @@ class Hub:
     def __init__(self, store, integrations=None, photos=None, weather=None, shopping=None):
         self.store = store
         self.integrations = integrations
+        self.live_camera = LiveCamera(integrations) if integrations is not None else None
         self.photos = photos
         self.weather_provider = weather
         self.shopping_bridge = shopping
@@ -509,6 +511,15 @@ def make_handler(hub, allowed, token=None):
                     self.wfile.write(raw)
                 elif path == '/api/home':
                     self.reply(hub.home_data())
+                elif match := re.fullmatch(r'/camera/live/([a-f0-9]{32})/(.+)', path):
+                    if hub.live_camera is None or query:
+                        return self.reply({'error': 'not found'}, 404)
+                    raw, kind = hub.live_camera.resource(match[1], match[2])
+                    self.send_response(200)
+                    self.send_header('Content-Type', kind)
+                    self.send_header('Content-Length', str(len(raw)))
+                    self.end_headers()
+                    self.wfile.write(raw)
                 elif match := re.fullmatch(r'/camera/([a-f0-9]{16})\.jpg', path):
                     if hub.integrations is None:
                         return self.reply({'error': 'not found'}, 404)
@@ -546,6 +557,14 @@ def make_handler(hub, allowed, token=None):
                     self.reply(result)
                 elif self.path == '/api/shopping/clear':
                     self.reply(hub.mutate_shopping(lambda items: items.__setitem__(slice(None), [i for i in items if not i['done']])))
+                elif self.path == '/api/camera/live':
+                    if hub.live_camera is None:
+                        return self.reply({'error': 'Camera not configured'}, 404)
+                    self.reply(hub.live_camera.start(body.get('id')))
+                elif self.path == '/api/camera/stop':
+                    if hub.live_camera is None or not re.fullmatch(r'[a-f0-9]{32}', str(body.get('session', ''))):
+                        return self.reply({'error': 'bad request'}, 400)
+                    self.reply(hub.live_camera.stop(body['session']))
                 elif self.path == '/api/home/action':
                     if hub.integrations is None:
                         time.sleep(0.25)  # sample adapter latency

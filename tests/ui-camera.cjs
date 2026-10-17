@@ -60,24 +60,26 @@ print('http://127.0.0.1:'+str(server.server_port),flush=True);server.serve_forev
       assert.equal(await page.evaluate(()=>window.liveCameraURLs.size),4);
     }
     await page.screenshot({path:'/tmp/home-hub-camera-qa.png'});
+    await page.route('**/api/camera/live',route=>route.fulfill({status:503,contentType:'application/json',body:'{"error":"synthetic unavailable"}'}));
     await page.locator('[data-action="camera:0"]').click();
-    await page.waitForFunction(()=>document.querySelector('.camera-frame img')?.naturalWidth===400);
+    await page.getByText('Live video unavailable · close and reopen to retry',{exact:true}).waitFor();
     assert.equal(await page.getByRole('dialog').count(),1);
-    await page.getByText('Snapshots refresh every 30 seconds. This is not continuous video.',{exact:true}).waitFor();
+    assert.equal(await page.locator('video').count(),1);
+    assert.equal(await page.locator('video').evaluate(v=>!v.getAttribute('src')&&v.paused),true);
     fs.writeFileSync(path.join(data,'fail-camera'),'1');
     await page.clock.runFor(31000);
-    await page.locator('.camera-frame').getByText('Update failed · previous snapshot',{exact:true}).waitFor();
-    assert.equal(await page.locator('.camera-frame img').evaluate(img=>img.naturalWidth),400);
+    await page.locator('.cam').getByText('Update failed · previous snapshot',{exact:true}).first().waitFor();
+    assert.equal(await page.locator('.cam img').first().evaluate(img=>img.naturalWidth),400);
     fs.unlinkSync(path.join(data,'fail-camera'));fs.writeFileSync(path.join(data,'privacy'),'1');
     await page.clock.runFor(31000);
-    await page.locator('.camera-frame').getByText('Camera unavailable',{exact:true}).waitFor();
-    assert.equal(await page.locator('.camera-frame img').getAttribute('src'),null);
+    await page.locator('.cam').getByText('Camera unavailable',{exact:true}).first().waitFor();
+    assert.equal(await page.locator('.cam img').first().getAttribute('src'),null);
     assert.equal(await page.evaluate(()=>window.liveCameraURLs.size),0);
     await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
     await page.locator('[data-action="nav:today"]').click();
     assert.equal(await page.locator('[data-camera-id]').count(),0);
     assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
-    console.log('Camera UI passed: four decoded snapshots, stage bounds, one viewer, refresh/outage label, last image retained during outage, privacy clears images, repeated redraw URL bounds, navigation cleanup, no external requests or JS errors.');
+    console.log('Camera UI passed: four decoded snapshots, stage bounds, one live-video failure viewer and decoder teardown, refresh/outage label, last image retained during outage, privacy clears images, repeated redraw URL bounds, navigation cleanup, no external requests or JS errors.');
   } finally {
     if(browser)await browser.close();server.kill('SIGTERM');fs.rmSync(data,{recursive:true,force:true});
   }

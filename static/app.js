@@ -488,6 +488,7 @@
     $('[data-action="close"]', overlay).focus();
   }
   function closeModal() {
+    stopLiveCamera();
     clearCameraImages(overlay);
     if (modalFocus) {
       renderHTML(overlay, "");
@@ -910,11 +911,70 @@
   function refreshCameras() {
     document.querySelectorAll('[data-camera-id]').forEach(img => refreshCamera(img));
   }
-  function cameraViewer(index) {
+  let liveCamera = null;
+  function stopLiveCamera() {
+    const live = liveCamera;
+    liveCamera = null;
+    if (!live) return;
+    live.controller.abort();
+    live.hls?.destroy();
+    live.video.pause();
+    live.video.removeAttribute('src');
+    live.video.load();
+    if (live.session) {
+      fetch('/api/camera/stop', {method:'POST', credentials:'same-origin', keepalive:true,
+        headers:{'Content-Type':'application/json'}, body:JSON.stringify({session:live.session})}).catch(()=>{});
+    }
+  }
+  async function cameraViewer(index) {
     const camera = state.home?.data.cameras[index];
     if (!camera || camera.available === false || state.home.stale) return;
-    modal(camera.name, `<div class="camera-frame"><img data-camera-id="${esc(camera.id)}" alt="Camera snapshot"><p class="camera-note">Loading snapshot…</p></div><p class="meta">Snapshots refresh every 30 seconds. This is not continuous video.</p>`);
-    refreshCameras();
+    modal(camera.name, `<div class="camera-live"></div><p class="camera-live-note" role="status">Starting live video…</p><p class="meta">Live video may have a short delay. Closing this viewer stops playback.</p>`);
+    const video = document.createElement('video');
+    video.controls = true;
+    video.muted = true;
+    video.playsInline = true;
+    $('.camera-live', overlay).append(video);
+    const note = $('.camera-live-note', overlay);
+    const live = {video, controller:new AbortController(), session:null, hls:null};
+    liveCamera = live;
+    const fail = message => {
+      if (liveCamera !== live) return;
+      stopLiveCamera();
+      note.textContent = message;
+    };
+    const timer = setTimeout(()=>fail('Live video timed out · close and reopen to retry'),30000);
+    video.addEventListener('playing',()=>{clearTimeout(timer);if(liveCamera===live)note.textContent='Live video · delayed feed';});
+    video.addEventListener('waiting',()=>{if(liveCamera===live)note.textContent='Buffering live video…';});
+    video.addEventListener('error',()=>fail('Live video unavailable · close and reopen to retry'));
+    try {
+      const response = await fetch('/api/camera/live', {method:'POST',credentials:'same-origin',signal:live.controller.signal,
+        headers:{'Content-Type':'application/json'},body:JSON.stringify({id:camera.id})});
+      if (!response.ok) throw new Error('Live video unavailable');
+      const result = await response.json();
+      const match = /^\/camera\/live\/([a-f0-9]{32})\/master_playlist\.m3u8$/.exec(result.url || '');
+      if (!match) throw new Error('Invalid stream');
+      live.session = match[1];
+      if (liveCamera !== live) return;
+      if (window.Hls?.isSupported()) {
+        live.hls = new Hls({enableWorker:false,lowLatencyMode:false,maxBufferLength:8,maxMaxBufferLength:15,
+          backBufferLength:0,maxBufferSize:8000000,manifestLoadingMaxRetry:3,levelLoadingMaxRetry:2,fragLoadingMaxRetry:1});
+        live.hls.on(Hls.Events.ERROR,(_,data)=>{
+          if(data.response?.code===410) fail('Camera unavailable');
+          else if(data.fatal) fail('Live video interrupted · close and reopen to retry');
+        });
+        live.hls.attachMedia(video);
+        live.hls.loadSource(result.url);
+        live.hls.on(Hls.Events.MANIFEST_PARSED,()=>video.play().catch(()=>{if(liveCamera===live)note.textContent='Press play to start live video';}));
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src=result.url;
+        await video.play();
+      } else fail('This browser cannot play the camera video');
+    } catch {
+      fail('Live video unavailable · close and reopen to retry');
+    } finally {
+      if (liveCamera !== live) clearTimeout(timer);
+    }
   }
   async function home(gen) {
     const r = await request("/api/home");

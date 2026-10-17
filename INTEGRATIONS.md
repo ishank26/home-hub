@@ -232,3 +232,53 @@ redraws with bounded image URLs, temporary outages and disabled-state clearing.
 Live frame acceptance also passed: authenticated camera HTTP over Wi-Fi returned
 a JPEG, and the actual 1280 × 800 WebView rendered the card and enlarged viewer.
 Physical privacy-mode switching remains an owner acceptance test.
+
+## Live camera video — 2026-10-17
+
+The enlarged camera viewer now plays HLS video through the existing private HA
+stream integration. Overview cards retain thirty-second stills. The stream is
+muted initially and may have a delay of several segments; closing the viewer,
+navigating away or a confirmed disabled response stops playback and clears the
+decoder. The frame's real WebView displayed moving video. Desktop Chromium also
+decoded 1920 × 1080 video over successive playlist reloads: roughly twenty seconds
+of advancing media time and over two hundred decoded frames, with no JS errors
+or external browser requests. A simulated midstream disabled state returned 410
+and cleared playback. A physical vendor privacy-mode transition remains untested.
+
+`camera_stream.py` uses a preconnected loopback socket for the fixed HA websocket
+command. A separate pinned websocket-client runtime is installed via
+`scripts/install-stream-runtime`; its systemd drop-in replaces only ExecStart,
+retaining the existing network admission and sandbox/resource limits. Revert by
+removing only `~/.config/systemd/user/home-hub.service.d/stream-runtime.conf`,
+then daemon-reload/restart; snapshots and other stdlib sources remain usable.
+The local hls.js light player is version/integrity pinned with its BSD license
+under `static/vendor`; no CDN is used.
+
+Upstream HLS tokens stay in one server-memory session, never in client manifests.
+Known HA playlist/fragment paths only are accepted; URI attributes are rewritten,
+foreign URLs, traversal, queries and unsupported/encrypted playlist tags fail
+closed. Gzip playlists have decompressed byte limits. LL-HLS directives are
+removed to use ordinary complete-segment polling on the legacy frame. At most
+two resource reads run concurrently; manifests are limited to 64 KiB and media
+resources to 8 MB. There is no media archive, resource map or server media cache.
+Fresh camera state is checked before and after every upstream resource read.
+One viewer session exists globally, expires after forty-five idle seconds or
+fifteen minutes total, and is revoked when another viewer starts. Reopen after
+expiry. Initial startup has bounded retries and a thirty-second deadline. Transient HA
+HLS 503 responses retain the session for retry; confirmed inactive/auth-denied
+responses revoke it.
+
+Fresh device discovery again found two C110s, three Deco X15 nodes and the known
+Twinkly. Govee LAN discovery returned no devices; SSDP found the gateway, and mDNS
+found an Amazon Fire TV plus existing cross-device/HA services. These protocols
+do not establish a complete router client inventory. The owner completed the second C110's ONVIF setup and Deco login. Both camera
+selections are saved privately; both returned valid JPEGs. Deco's connected-client
+view lists fourteen clients, including two Google speakers, a Roku TV, LG laundry
+and four unnamed IoT clients. The four IoT clients did not answer targeted Govee
+scan requests; identification and LAN compatibility are still unproven. Google
+Cast known-host configuration restored both existing speaker entities to `off`
+(available). Roku's control endpoint was unreachable; TV-side network-control
+settings need owner verification.
+The Fire TV needs the official ADB integration and TV-side authorization before
+control; no network debugging was enabled. Both existing Cast speakers now report available state after direct-host setup. H100/T110, C246D, D205 and Govee enrollment still require the missing
+network/device or exact-variant evidence described in the infrastructure runbook.

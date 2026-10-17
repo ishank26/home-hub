@@ -173,6 +173,29 @@ class ServerTests(unittest.TestCase):
         sources = self.api('/api/status')['sources']
         self.assertEqual(next(s for s in sources if s['id'] == 'photos')['state'], 'stale')
 
+    def test_live_camera_routes_require_json_and_never_cache_or_forward_queries(self):
+        from unittest.mock import Mock
+        from integrations import CameraInactive
+        sid='a'*32
+        live=Mock()
+        live.stop.return_value={'stopped':True}
+        live.start.return_value={'url':'/camera/live/'+sid+'/master_playlist.m3u8'}
+        live.resource.return_value=(b'#EXTM3U\n','application/vnd.apple.mpegurl')
+        self.hub.live_camera=live
+        self.assertEqual(self.request('/api/camera/live','POST',{'id':'b'*16},content_type='text/plain')[0],400)
+        live.start.assert_not_called()
+        self.assertEqual(self.request('/api/camera/live','POST',{'id':'b'*16})[0],200)
+        live.start.assert_called_once_with('b'*16)
+        route='/camera/live/'+sid+'/master_playlist.m3u8'
+        status,headers,raw=self.request(route)
+        self.assertEqual((status,headers['Cache-Control'],raw),(200,'no-store',b'#EXTM3U\n'))
+        self.assertEqual(self.request(route+'?_HLS_msn=1')[0],404)
+        live.resource.assert_called_once_with(sid,'master_playlist.m3u8')
+        live.resource.side_effect=CameraInactive('Camera unavailable')
+        self.assertEqual(self.request(route)[0],410)
+        self.assertEqual(self.request('/api/camera/stop','POST',{'session':sid})[0],200)
+        live.stop.assert_called_once_with(sid)
+
     def test_camera_snapshot_route_stays_authenticated_and_uncached(self):
         from integrations import HomeAssistant
         self.hub.integrations = HomeAssistant({'cameras': [{'entity': 'camera.test'}]}, 'synthetic-camera-token')
