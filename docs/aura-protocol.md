@@ -120,3 +120,17 @@ downloaded. First live setup must verify frame membership, image-proxy URL shape
 pagination, photo inclusion/exclusion and an upload through the official app.
 Native frame reboot/soak and encrypted/isolated LAN transport remain separate
 acceptance items. Current HTTP frame admission does not encrypt LAN traffic.
+
+
+## Large-frame bounded selection
+
+Frames larger than 1,000 eligible still images use the first 1,000 distinct eligible
+assets in the vendor API's returned order. The mirror does not assume that this
+order means newest first. The local setup prompt discloses this limit, and the
+photo grid and screensaver label a bounded selection. This is not a full archive
+or a promise to display every image on a larger frame. Pagination stops at the
+selection boundary; disk, file, download and sync-time limits remain unchanged.
+
+Browser sign-in does not authorize the separate mirror worker. The owner must run
+`scripts/aura-setup` locally for its hidden password prompt and explicit frame
+selection. The timer is enabled only after a complete first publication succeeds.

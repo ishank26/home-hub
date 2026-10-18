@@ -149,6 +149,7 @@ class AuraClient:
     def assets(self, frame_id):
         frame_id = identifier(frame_id)
         found, cursors, cursor = {}, set(), None
+        self.window_limited = False
         for _ in range(100):
             query = {'limit': 100}
             if cursor is not None:
@@ -157,7 +158,7 @@ class AuraClient:
             assets = page.get('assets')
             if not isinstance(assets, list) or len(assets) > 1000:
                 raise AuraError('Aura asset list is unavailable')
-            for asset in assets:
+            for index, asset in enumerate(assets):
                 if not isinstance(asset, dict):
                     raise AuraError('Aura asset response is malformed')
                 aid = identifier(asset.get('id'))
@@ -166,8 +167,11 @@ class AuraClient:
                 if asset.get('video_file_name') and not asset.get('is_live'):
                     continue  # Live Photos use their still image; videos are excluded.
                 found[aid] = asset
-                if len(found) > MAX_PHOTOS:
-                    raise AuraError('Aura frame exceeds the 1000-photo mirror limit')
+                if len(found) == MAX_PHOTOS:
+                    # Keep the existing disk/memory bounds for large frames.
+                    # Vendor order is preserved; no assumption about recency.
+                    self.window_limited = index < len(assets) - 1 or bool(page.get('next_page_cursor'))
+                    return list(found.values())
             cursor = page.get('next_page_cursor')
             if not cursor:
                 return list(found.values())
@@ -296,7 +300,8 @@ def synchronize(client, frame_id, directory):
                     byte_count += sum(path.stat().st_size for path in fresh)
                 photos.append({'id': pid})
             stamp = datetime.now(timezone.utc).isoformat()
-            atomic_json(directory / 'manifest.json', {'syncedAt': stamp, 'photos': photos})
+            atomic_json(directory / 'manifest.json', {'syncedAt': stamp, 'photos': photos,
+                         'windowLimited': getattr(client, 'window_limited', False) is True})
             published = True
             atomic_json(directory / 'status.json', {'state': 'current', 'updatedAt': stamp})
             # Only old generated JPEGs are eligible, after publication and a grace
@@ -326,6 +331,7 @@ def setup(config_dir=CONFIG, data=DEFAULT_DATA):
     config_dir = Path(config_dir)
     config_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     print('Sign in to your existing Aura account. Password input is hidden and is not saved.')
+    print('This mirror displays up to 1000 eligible photos in Aura API order; larger frames use a bounded selection.')
     email = input('Aura account email: ').strip()
     password = getpass.getpass('Aura password: ')
     client = AuraClient()

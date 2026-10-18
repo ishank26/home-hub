@@ -69,8 +69,11 @@ for char,color in [('a','#8aa898'),('b','#143e8c')]:
     await page.locator('[data-action="slideshow"]').click();
     await page.locator('#saver-source').getByText('Aura photos',{exact:true}).waitFor();
     publish([second]);
+    const limitedManifest=JSON.parse(fs.readFileSync(path.join(data,'photos','manifest.json')));
+    limitedManifest.windowLimited=true;write('manifest.json',limitedManifest);
     await page.clock.runFor(91000);
     await page.waitForFunction(id=>[...document.querySelectorAll('.saver img')].some(img=>img.getAttribute('src')===`/photos/${id}`&&img.naturalWidth===1280),second);
+    await page.locator('#saver-source').getByText('Aura photos · 1,000-photo selection',{exact:true}).waitFor();
     write('status.json',{state:'failed'});
     await page.clock.runFor(61000);
     await page.locator('#saver-source').getByText('Stale photos',{exact:true}).waitFor();

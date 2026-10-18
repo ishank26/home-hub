@@ -57,6 +57,21 @@ class ClientTests(unittest.TestCase):
             with self.assertRaisesRegex(AuraError, 'pagination'):
                 client.assets('frame-1')
 
+    def test_large_frame_uses_bounded_vendor_order_window(self):
+        client = AuraClient()
+        pages = [{'assets': [{'id': 'a' + str(i)} for i in range(start, start + 100)],
+                  'next_page_cursor': 'page' + str(start)} for start in range(0, 1100, 100)]
+        with patch.object(client, '_api', side_effect=pages) as api:
+            result = client.assets('synthetic-frame')
+        self.assertEqual(len(result), 1000)
+        self.assertEqual(api.call_count, 10)
+        self.assertEqual(result[0]['id'], 'a0')
+        self.assertEqual(result[-1]['id'], 'a999')
+        self.assertTrue(client.window_limited)
+        with patch.object(client, '_api', return_value={'assets': [{'id': 'only'}]}):
+            self.assertEqual(len(client.assets('synthetic-frame')), 1)
+        self.assertFalse(client.window_limited)
+
     def test_transport_does_not_inherit_proxies_and_rejects_redirects(self):
         with patch.dict(os.environ, {'https_proxy': 'https://example.test:8443'}):
             client = AuraClient()
