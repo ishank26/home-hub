@@ -5,7 +5,7 @@ from unittest.mock import patch, Mock
 import recipes
 
 RECIPE = {'@type': 'Recipe', 'name': 'Simple tomato pasta',
-          'recipeIngredient': ['2 cups pasta', '<b>3</b> tomatoes'],
+          'recipeYield': ['4'], 'recipeIngredient': ['2 cups pasta', '<b>3</b> tomatoes'],
           'recipeInstructions': [{'@type':'HowToSection','itemListElement':[
               {'@type':'HowToStep','text':'Boil the pasta.'}, {'text':'Stir in tomatoes.'}]}]}
 
@@ -15,6 +15,7 @@ def page(recipe):
 class RecipeTests(unittest.TestCase):
     def test_jsonld_graph_sections_and_text_only_output(self):
         recipe = recipes.parse_recipe(page(RECIPE), 'https://example.com/pasta')
+        self.assertEqual(recipe['yield'], '4')
         self.assertEqual(recipe['ingredients'], ['2 cups pasta', '3 tomatoes'])
         self.assertEqual(recipe['steps'], ['Boil the pasta.', 'Stir in tomatoes.'])
         self.assertNotIn('<b>', str(recipe))

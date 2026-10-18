@@ -263,9 +263,14 @@ def parse_recipe(source, url):
         ingredients = [x for x in ingredients if x]
         steps = [x for x in steps if x][:100]
         if title and ingredients and steps:
+            servings = recipe.get('recipeYield', '')
+            if isinstance(servings, list):
+                servings = ' / '.join(str(v) for v in servings[:4] if type(v) in (str, int, float))
+            elif type(servings) not in (str, int, float):
+                servings = ''
             return {'title': title, 'description': plain(recipe.get('description'), 1000),
                     'ingredients': ingredients, 'steps': steps, 'url': safe_url(url),
-                    'yield': plain(str(recipe.get('recipeYield', '')), 100),
+                    'yield': plain(str(servings), 100),
                     'totalTime': plain(recipe.get('totalTime'), 80)}
     raise ValueError('No structured recipe found. Try the recipe’s own page rather than a search or social link.')
 
