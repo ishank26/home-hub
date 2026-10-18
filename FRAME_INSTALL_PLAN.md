@@ -223,3 +223,15 @@ were open/unmerged when checked; they are not approved installation inputs.
 **Resume input needed:** About model/full firmware, ports, whether a known A-to-C
 **data** cable is attached directly and the frame is powered, and (only for network
 fallback) confirmed TCP-7806 isolation plus the owner's positively identified frame IP.
+
+
+### Kiosk v0.5 browser update
+
+Adds an unexported single-tab BrowserActivity using the installed WebView, native
+address/search/history controls and a Read recipe result back to the dashboard.
+No new runtime engine, permissions, public server route or network admission.
+Update uses `adb -d install -r kiosk/build/home-hub-kiosk.apk` after source review
+and signed build verification. A private copy of the installed predecessor APK is
+retained under the owner state directory; never commit that binary or pairing data.
+Hardware acceptance must verify launch, web page loading, cancellation/back,
+Read recipe import/focus, and normal dashboard restoration with existing pairing.

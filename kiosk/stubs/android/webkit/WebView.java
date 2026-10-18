@@ -10,6 +10,12 @@ public class WebView extends View {
     public void setBackgroundColor(int color) { throw new RuntimeException(); }
     public void loadUrl(String url) { throw new RuntimeException(); }
     public void loadData(String data, String mimeType, String encoding) { throw new RuntimeException(); }
+    public String getUrl() { throw new RuntimeException(); }
+    public boolean canGoForward() { throw new RuntimeException(); }
+    public void goForward() { throw new RuntimeException(); }
+    public void reload() { throw new RuntimeException(); }
+    public void stopLoading() { throw new RuntimeException(); }
+    public void clearHistory() { throw new RuntimeException(); }
     public boolean canGoBack() { throw new RuntimeException(); }
     public void goBack() { throw new RuntimeException(); }
     public void onPause() { throw new RuntimeException(); }

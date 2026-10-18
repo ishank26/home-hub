@@ -821,8 +821,8 @@
     const scroll = $(".recipe-scroll")?.scrollTop || 0;
     stage.classList.toggle("recipe-focus", recipeFocus);
     const r = activeRecipe;
-    const controls = r ? `<div class="recipe-tools">${button("← Recipes", "recipeback")}${button(recipeFocus ? "Exit focus" : "Focus mode", "recipefocus")}${button(recipeLarge ? "Normal text" : "Larger text", "recipefont")}${button("Share source", "recipeshare")}${button("Reader link", "recipelink")}</div>` : "";
-    const body = r ? `${controls}<article class="recipe-reader ${recipeLarge ? "recipe-large" : ""}"><p class="meta">${esc(new URL(r.url).hostname)}${r.yield ? " · Serves " + esc(r.yield) : ""}${r.totalTime ? " · " + esc(r.totalTime.replace(/^PT/, "").toLowerCase()) : ""}</p><h1>${esc(r.title)}</h1>${r.description ? `<p>${esc(r.description)}</p>` : ""}<h2>Ingredients</h2><div class="recipe-ingredients">${r.ingredients.map((x,i)=>button(`${recipeDone.has("i"+i) ? "✓ " : "○ "}${esc(x)}`, "recipecheck:i"+i, "recipe-line", `aria-pressed="${recipeDone.has("i"+i)}"`)).join("")}</div><h2>Method</h2>${r.steps.map((x,i)=>button(`<b>${i+1}.</b><span>${esc(x)}</span>`, "recipecheck:s"+i, "recipe-line recipe-step", `aria-pressed="${recipeDone.has("s"+i)}"`)).join("")}<p class="meta">Recipe text from the linked publisher. Use Share source for the original recipe.</p></article>` : `<div class="card recipe-intro"><h2>A little space to cook</h2><p>Paste a recipe link for clear ingredients and step-by-step cooking, without ads or popups.</p><form id="recipe-form"><label for="recipe-url">Recipe link</label><div class="recipe-input-row"><input id="recipe-url" name="url" type="url" required maxlength="4096" placeholder="https://…" autocomplete="off"><button class="btn primary" type="submit">Open recipe</button></div><p id="recipe-error" role="status"></p></form><p class="meta">Supports pages with structured recipe data. Your five most recent recipes stay on this server.</p></div><div class="recipe-saved">${recipeList.map((x,i)=>button(esc(x.title), "recipeopen:"+i, "btn")).join("")}</div>`;
+    const controls = r ? `<div class="recipe-tools">${button("← Recipes", "recipeback")}${button(recipeFocus ? "Exit focus" : "Focus mode", "recipefocus")}${button(recipeLarge ? "Normal text" : "Larger text", "recipefont")}${button("Share source", "recipeshare")}${button("Reader link", "recipelink")}${button("Browse source", "recipevisit")}</div>` : "";
+    const body = r ? `${controls}<article class="recipe-reader ${recipeLarge ? "recipe-large" : ""}"><p class="meta">${esc(new URL(r.url).hostname)}${r.yield ? " · Serves " + esc(r.yield) : ""}${r.totalTime ? " · " + esc(r.totalTime.replace(/^PT/, "").toLowerCase()) : ""}</p><h1>${esc(r.title)}</h1>${r.description ? `<p>${esc(r.description)}</p>` : ""}<h2>Ingredients</h2><div class="recipe-ingredients">${r.ingredients.map((x,i)=>button(`${recipeDone.has("i"+i) ? "✓ " : "○ "}${esc(x)}`, "recipecheck:i"+i, "recipe-line", `aria-pressed="${recipeDone.has("i"+i)}"`)).join("")}</div><h2>Method</h2>${r.steps.map((x,i)=>button(`<b>${i+1}.</b><span>${esc(x)}</span>`, "recipecheck:s"+i, "recipe-line recipe-step", `aria-pressed="${recipeDone.has("s"+i)}"`)).join("")}<p class="meta">Recipe text from the linked publisher. Use Share source for the original recipe.</p></article>` : `<div class="card recipe-intro"><h2>Find something to cook</h2><p>Search the web, open a recipe, then tap <b>Read recipe</b> in the tablet browser.</p><form id="recipe-search-form"><label for="recipe-search">Search recipes or enter a website</label><div class="recipe-input-row"><input id="recipe-search" name="query" maxlength="2048" placeholder="Try: easy vegetarian dinner" autocomplete="off"><button class="btn primary" type="submit">Search / Browse</button></div></form><p class="meta">Search uses DuckDuckGo. ${button("Open browser", "recipebrowse", "link")}</p><form id="recipe-form"><label for="recipe-url">Or paste a recipe link</label><div class="recipe-input-row"><input id="recipe-url" name="url" type="url" required maxlength="4096" placeholder="https://…" autocomplete="off"><button class="btn primary" type="submit">Open recipe</button></div><p class="meta">To paste: press and hold the link field, then choose Paste.</p><p id="recipe-error" role="status"></p></form><p class="meta">Supports pages with structured recipe data. Your five most recent recipes stay on this server.</p></div><div class="recipe-saved">${recipeList.map((x,i)=>button(esc(x.title), "recipeopen:"+i, "btn")).join("")}</div>`;
     frame("Recipes", {data:{}}, `<div class="recipe-scroll">${body}</div>`);
     $(".recipe-scroll").scrollTop=scroll;
   }
@@ -847,6 +847,23 @@
       clearTimeout(timeout);
       if (submit && submit.isConnected) {submit.disabled=false;submit.textContent="Open recipe";}
     }
+  }
+  function browseRecipes(query = "") {
+    const text=String(query).trim().slice(0,2048);
+    if (navigator.userAgent.includes("HomeHubKiosk/")) {
+      location.assign("homehub://browse?query="+encodeURIComponent(text));
+      return;
+    }
+    let target="https://duckduckgo.com/";
+    if (/^[a-z][a-z0-9+.-]*:/i.test(text)) {
+      try {
+        const url=new URL(text);
+        if(url.protocol!=="https:" || url.username || url.password) throw new Error();
+        target=url.href;
+      } catch {toast("Use a public HTTPS website address, or enter search words");return;}
+    } else if(text) target+="?q="+encodeURIComponent(text);
+    window.open(target,"_blank","noopener,noreferrer");
+    toast("Copy the recipe address, return here, and paste it into Recipe link",null,"Undo",9000);
   }
   async function shareRecipe(reader=false) {
     const url=reader ? location.origin+"/?recipe="+encodeURIComponent(activeRecipe.url) : activeRecipe.url;
@@ -1400,6 +1417,8 @@
 
   async function action(value) {
     const [kind, arg, delta] = value.split(":");
+    if (kind === "recipebrowse") return browseRecipes();
+    if (kind === "recipevisit") return browseRecipes(activeRecipe.url);
     if (kind === "recipeback") {activeRecipe=null;recipeFocus=false;recipeDone.clear();return navigate("recipes");}
     if (kind === "recipeopen") {activeRecipe=recipeList[Number(arg)];recipeDone.clear();return drawRecipe();}
     if (kind === "recipefocus") {recipeFocus=!recipeFocus;return drawRecipe();}
@@ -1614,6 +1633,7 @@
     else if (e.target.classList.contains("modal-back")) closeModal();
   });
   document.addEventListener("submit", (e) => {
+    if (e.target.id === "recipe-search-form") {e.preventDefault();browseRecipes(new FormData(e.target).get("query"));return;}
     if (e.target.id === "recipe-form") {e.preventDefault();importRecipe(new FormData(e.target).get("url"));return;}
     if (e.target.id !== "add-form") return;
     e.preventDefault();

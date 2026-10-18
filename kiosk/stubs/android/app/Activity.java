@@ -8,6 +8,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
 public class Activity extends Context {
+    public Object getSystemService(String name) { throw new RuntimeException(); }
     protected void onCreate(Bundle savedInstanceState) { throw new RuntimeException(); }
     protected void onNewIntent(Intent intent) { throw new RuntimeException(); }
     protected void onResume() { throw new RuntimeException(); }
@@ -21,5 +22,8 @@ public class Activity extends Context {
     public SharedPreferences getSharedPreferences(String name, int mode) { throw new RuntimeException(); }
     public void setContentView(View view) { throw new RuntimeException(); }
     public void finish() { throw new RuntimeException(); }
+    public void startActivityForResult(Intent intent, int request) { throw new RuntimeException(); }
+    public void setResult(int result, Intent intent) { throw new RuntimeException(); }
+    protected void onActivityResult(int request, int result, Intent intent) { throw new RuntimeException(); }
     public void startActivity(Intent intent) { throw new RuntimeException(); }
 }

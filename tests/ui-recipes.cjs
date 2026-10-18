@@ -19,7 +19,14 @@ print(s.server_port,flush=True);s.serve_forever()
  const errors=[],external=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(!r.url().startsWith(base))external.push(r.url())});
  await page.goto(base);assert.equal(await page.title(),'Home Hub');
  await page.getByRole('button',{name:'Recipes',exact:true}).click();
- await page.getByLabel('Recipe link',{exact:true}).fill('https://example.com/pasta');
+ await page.evaluate(()=>{window.__browse=[];window.open=(url,target,features)=>{window.__browse.push({url,target,features});return {};};});
+ await page.getByLabel('Search recipes or enter a website',{exact:true}).fill('easy pasta & tomatoes');
+ await page.getByRole('button',{name:'Search / Browse',exact:true}).click();
+ const opened=await page.evaluate(()=>window.__browse[0]);
+ assert.equal(opened.url,'https://duckduckgo.com/?q=easy%20pasta%20%26%20tomatoes');
+ assert.equal(opened.features,'noopener,noreferrer');
+ await page.getByText('To paste: press and hold the link field, then choose Paste.',{exact:true}).waitFor();
+ await page.getByLabel('Or paste a recipe link',{exact:true}).fill('https://example.com/pasta');
  await page.getByRole('button',{name:'Open recipe',exact:true}).click();
  await page.getByRole('heading',{name:'Simple tomato pasta'}).waitFor();
  await page.getByRole('button',{name:'Focus mode',exact:true}).click();

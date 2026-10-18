@@ -10,6 +10,8 @@ import android.view.View;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import java.net.URI;
+import java.net.URLDecoder;
 
 /**
  * Fullscreen dashboard kiosk. Loads the Home Hub page, keeps the screen on, hides system bars,
@@ -87,10 +89,34 @@ public class MainActivity extends Activity {
         settings.setAllowFileAccess(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setTextZoom(100);
+        settings.setUserAgentString(settings.getUserAgentString() + " HomeHubKiosk/0.5");
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String target) {
-                return false;
+                String trusted = BrowserPolicy.origin(url);
+                boolean fromHub = trusted.length() > 0 && trusted.equals(BrowserPolicy.origin(view.getUrl()));
+                if (target != null && target.startsWith("homehub:")) {
+                    if (fromHub) {
+                        try {
+                            URI action = new URI(target);
+                            String query = action.getRawQuery();
+                            if ("browse".equals(action.getHost()) && query != null && query.startsWith("query=")
+                                    && query.indexOf('&') == -1 && query.length() <= 6500) {
+                                String input = URLDecoder.decode(query.substring(6), "UTF-8");
+                                if (input.length() <= 2048) {
+                                    handler.removeCallbacks(retry);retryPending=false;
+                                    startActivityForResult(new Intent(MainActivity.this, BrowserActivity.class).putExtra("query", input), 42);
+                                }
+                            }
+                        } catch (Exception ignored) { /* malformed action: no navigation */ }
+                    }
+                    return true;
+                }
+                if (trusted.length() > 0 && trusted.equals(BrowserPolicy.origin(target))) return false;
+                if (fromHub && BrowserPolicy.isPublicHttps(target)) {
+                    startActivityForResult(new Intent(MainActivity.this, BrowserActivity.class).putExtra("query", target),42);
+                }
+                return true;
             }
 
             @Override
@@ -114,6 +140,19 @@ public class MainActivity extends Activity {
         super.onNewIntent(intent);
         if (saveRequestedUrl(intent)) {
             web.loadUrl(url);
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request,result,data);
+        if (request != 42 || result != -1 || data == null) return;
+        String source=data.getStringExtra("recipe");
+        String hub=BrowserPolicy.origin(url);
+        if (hub.length() > 0 && BrowserPolicy.isPublicHttps(source)) {
+            // Keep the saved boot/pair URL untouched. The publisher never sees it.
+            handler.removeCallbacks(retry);retryPending=false;
+            web.loadUrl(hub + "/?recipe=" + BrowserPolicy.encode(source));
         }
     }
 

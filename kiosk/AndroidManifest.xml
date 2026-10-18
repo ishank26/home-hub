@@ -3,8 +3,8 @@
      Only permission: INTERNET, to load the dashboard from the Home Hub server (LAN or USB `adb reverse`). -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.homehub.kiosk"
-    android:versionCode="4"
-    android:versionName="0.4">
+    android:versionCode="5"
+    android:versionName="0.5">
 
     <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="23" />
     <uses-permission android:name="android.permission.INTERNET" />
@@ -14,6 +14,9 @@
         android:allowBackup="false"
         android:hardwareAccelerated="true"
         android:usesCleartextTraffic="true">
+        <activity android:name=".BrowserActivity" android:exported="false"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:screenOrientation="landscape" />
         <activity
             android:name=".MainActivity"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen"

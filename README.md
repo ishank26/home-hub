@@ -185,7 +185,7 @@ and the mirror picks them up after sync. [Protocol and operation](docs/aura-prot
 
 Full backend/image tests: `~/.local/share/home-hub/aura-venv/bin/python -m unittest discover -s tests -v`.
 The normal stdlib-only test run skips the five Pillow-dependent test methods when
-Pillow is absent; the dedicated-runtime verification now runs 100 tests with no skips.
+Pillow is absent; the dedicated-runtime verification now runs 101 tests with no skips.
 Photo browser flow: `NODE_PATH=/tmp/home-hub-browser/node_modules node tests/ui-aura.cjs`.
 
 Camera browser flow: `NODE_PATH=/tmp/home-hub-browser/node_modules node tests/ui-camera.cjs`.
@@ -213,3 +213,24 @@ browser already authorized for this private dashboard. Publisher pages must
 provide Schema.org Recipe JSON-LD; blocked/login-only pages are not bypassed.
 Only the five most recent extracted text recipes are stored, with no downloaded
 publisher images or page archives. Browser QA: `node tests/ui-recipes.cjs`.
+
+
+The tablet kiosk v0.5 includes a lightweight single-tab WebView browser. In
+**Recipes**, enter search words or a website and choose **Search / Browse**. Open
+an actual recipe page, then use the native **Read recipe** button to return to
+focus reading automatically. **Dashboard** returns without importing. The browser
+has an address bar, Back/Forward and Reload, and uses the existing system WebView
+rather than installing a new engine. Search uses DuckDuckGo. On ordinary desktop
+browsers, search opens a separate tab; copy its recipe URL and paste it back.
+To paste on the tablet, press and hold the recipe-link field and choose Paste.
+
+BrowserActivity is unexported and has no JavaScript/native bridge. Unsupported
+schemes, IP-literal/local-name URLs, file/content access, mixed content and popup windows
+are blocked; certificate validation retains Android defaults. Browser disk cache
+and third-party cookies are disabled. Returning a recipe validates its URL again
+and leaves the private dashboard boot/pairing URL unchanged. No extra permission
+was added. APKs and signing material remain outside Git publication.
+
+The native browser uses ordinary Android web networking, not the server recipe
+fetcher’s DNS pinning. Its website-name checks do not promise DNS-rebinding or
+private-DNS isolation. The stricter recipe fetch validation still runs on import.
