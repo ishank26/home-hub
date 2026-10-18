@@ -74,6 +74,7 @@ for char,color in [('a','#8aa898'),('b','#143e8c')]+[(f'{i:032x}','#8aa898') for
     await page.locator('[data-action="nav:photos"]').click();
     await page.waitForFunction(()=>document.querySelector('.photo-grid img')?.naturalWidth===400);
     assert((await page.locator('.photo-grid img').getAttribute('src')).startsWith('blob:'));
+    assert.equal(await page.locator('.head .pill').filter({hasText:/Stale/}).count(),0);
     await page.locator('[data-action="photo:0"]').click();
     await page.waitForFunction(()=>document.querySelector('.viewer img')?.naturalWidth===1280);
     await page.locator('[data-action="close"]').click();
@@ -90,8 +91,11 @@ for char,color in [('a','#8aa898'),('b','#143e8c')]+[(f'{i:032x}','#8aa898') for
     await page.clock.runFor(61000);
     await page.locator('#saver-source').getByText('Aura photos · 1,000-photo selection',{exact:true}).waitFor();
     write('status.json',{state:'failed'});
+    const staleManifest=page.waitForResponse('**/api/photos/manifest');
     await page.clock.runFor(61000);
-    await page.locator('#saver-source').getByText('Stale photos',{exact:true}).waitFor();
+    assert.equal((await (await staleManifest).json()).state,'stale');
+    await page.locator('#saver-source').getByText('Aura photos · 1,000-photo selection',{exact:true}).waitFor();
+    assert.equal(await page.getByText('Stale photos',{exact:true}).count(),0);
     publish([]);
     await page.clock.runFor(61000);
     await page.waitForFunction(()=>[...document.querySelectorAll('.saver img')].every(img=>!img.hasAttribute('src')&&img.style.opacity==='0'));

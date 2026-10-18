@@ -388,7 +388,7 @@
     );
   }
   function badge(result) {
-    return result.stale
+    return result.stale && state.view !== "photos"
       ? `<span class="pill warn">Stale · last loaded ${esc(time(result.at))}</span>`
       : result.data.source === "sample"
         ? '<span class="pill">Sample data</span>'
@@ -1300,9 +1300,7 @@
           saverPhotos = r.data.photos.filter(
             (p) => state.collection === "All" || p.collections.includes(state.collection),
           );
-          $("#saver-source").textContent = r.stale
-            ? "Stale photos"
-            : r.data.source === "sample"
+          $("#saver-source").textContent = r.data.source === "sample"
               ? "Sample photos"
               : r.data.source === "unconfigured" ? "Aura photos need setup"
                 : r.data.sampling === "hourly-random" ? "Aura photos · hourly random sample"
