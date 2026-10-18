@@ -13,6 +13,7 @@ import io
 import json
 import os
 import re
+import random
 import shutil
 import sys
 import tempfile
@@ -26,7 +27,7 @@ from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 from integrations import private_json
-from photos import MAX_PHOTOS, PHOTO_ID
+from photos import MAX_PHOTOS, PHOTO_ID, PhotoLibrary
 
 API = 'https://api.pushd.com/v5'
 IMAGE_HOST = 'imgproxy.pushd.com'
@@ -35,7 +36,9 @@ DEFAULT_DATA = Path.home() / '.local/share/home-hub/data'
 MAX_IMAGE_BYTES = 32 * 1024 * 1024
 MAX_CACHE_BYTES = 512 * 1024 * 1024
 MAX_CACHE_FILES = 4000
-MAX_NEW_PHOTOS = 100  # Publish a useful first batch, then fill the window on later syncs.
+MAX_NEW_PHOTOS = 10
+SAMPLE_SIZE = 10
+MAX_CATALOG = 10000
 MIN_FREE_BYTES = 128 * 1024 * 1024
 
 
@@ -149,8 +152,9 @@ class AuraClient:
 
     def assets(self, frame_id):
         frame_id = identifier(frame_id)
-        found, cursors, cursor = {}, set(), None
+        sample, seen, cursors, cursor = [], set(), set(), None
         self.window_limited = False
+        rng = random.SystemRandom()
         for _ in range(100):
             query = {'limit': 100}
             if cursor is not None:
@@ -159,23 +163,27 @@ class AuraClient:
             assets = page.get('assets')
             if not isinstance(assets, list) or len(assets) > 1000:
                 raise AuraError('Aura asset list is unavailable')
-            for index, asset in enumerate(assets):
+            for asset in assets:
                 if not isinstance(asset, dict):
                     raise AuraError('Aura asset response is malformed')
                 aid = identifier(asset.get('id'))
-                if asset.get('hidden') is True or asset.get('selected') is False:
+                if (asset.get('hidden') is True or asset.get('selected') is False
+                        or (asset.get('video_file_name') and not asset.get('is_live')) or aid in seen):
                     continue
-                if asset.get('video_file_name') and not asset.get('is_live'):
-                    continue  # Live Photos use their still image; videos are excluded.
-                found[aid] = asset
-                if len(found) == MAX_PHOTOS:
-                    # Keep the existing disk/memory bounds for large frames.
-                    # Vendor order is preserved; no assumption about recency.
-                    self.window_limited = index < len(assets) - 1 or bool(page.get('next_page_cursor'))
-                    return list(found.values())
+                seen.add(aid)
+                if len(seen) > MAX_CATALOG:
+                    raise AuraError('Aura catalog exceeds the metadata scan budget')
+                # Reservoir sampling: every eligible distinct photo across all
+                # pages has equal inclusion probability; only ten assets held.
+                if len(sample) < SAMPLE_SIZE:
+                    sample.append(asset)
+                else:
+                    slot = rng.randrange(len(seen))
+                    if slot < SAMPLE_SIZE:
+                        sample[slot] = asset
             cursor = page.get('next_page_cursor')
             if not cursor:
-                return list(found.values())
+                return sample
             if not isinstance(cursor, str) or len(cursor) > 4096 or cursor in cursors:
                 raise AuraError('Aura pagination did not progress')
             cursors.add(cursor)
@@ -257,6 +265,42 @@ def cache_usage(cache, protected):
     return count, size
 
 
+def prune_sample(cache, protected):
+    """Delete only generated JPEGs not referenced by the published sample."""
+    for path in cache.iterdir():
+        pid = path.name.split('.')[0]
+        if (PHOTO_ID.fullmatch(pid) and path.name in (pid + '.jpg', pid + '.thumb.jpg')
+                and pid not in protected and path.is_file() and not path.is_symlink()):
+            path.unlink()
+
+
+def trim_sample(directory):
+    """Migrate an older large local cache without requiring cloud credentials."""
+    directory = Path(directory)
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with (directory / '.sync-lock').open('a') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise AuraError('A photo sync is already running') from None
+        path = directory / 'manifest.json'
+        if not path.exists():
+            if (directory / 'cache').is_dir():
+                prune_sample(directory / 'cache', set())
+            return 0
+        library = PhotoLibrary(directory).manifest()
+        photos = [{'id': p['id']} for p in library['photos']
+                  if all((directory / 'cache' / (p['id'] + suffix)).is_file()
+                         and not (directory / 'cache' / (p['id'] + suffix)).is_symlink()
+                         for suffix in ('.jpg', '.thumb.jpg'))]
+        if len(photos) > SAMPLE_SIZE:
+            photos = random.SystemRandom().sample(photos, SAMPLE_SIZE)
+        atomic_json(path, {'syncedAt': library['syncedAt'], 'photos': photos,
+                          'sampling': 'hourly-random', 'syncPending': False, 'windowLimited': False})
+        prune_sample(directory / 'cache', {p['id'] for p in photos})
+        return len(photos)
+
+
 def synchronize(client, frame_id, directory):
     """Publish only a complete snapshot. Failures leave the last manifest intact."""
     directory = Path(directory)
@@ -306,12 +350,12 @@ def synchronize(client, frame_id, directory):
                 raise AuraError('Aura sync has no completed photos yet; retry locally')
             stamp = datetime.now(timezone.utc).isoformat()
             atomic_json(directory / 'manifest.json', {'syncedAt': stamp, 'photos': photos,
-                         'windowLimited': getattr(client, 'window_limited', False) is True, 'syncPending': pending})
+                         'windowLimited': False, 'syncPending': pending, 'sampling': 'hourly-random'})
             published = True
             atomic_json(directory / 'status.json', {'state': 'current', 'updatedAt': stamp})
             # Only old generated JPEGs are eligible, after publication and a grace
             # period for an already-running slideshow. No original files are kept.
-            cache_usage(cache, {p['id'] for p in photos})
+            prune_sample(cache, {p['id'] for p in photos})
             return len(photos)
         except (AuraError, OSError):
             atomic_json(directory / 'status.json', {'state': 'failed', 'error': 'Aura sync failed; cached photos retained'})
@@ -336,7 +380,7 @@ def setup(config_dir=CONFIG, data=DEFAULT_DATA):
     config_dir = Path(config_dir)
     config_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     print('Sign in to your existing Aura account. Password input is hidden and is not saved.')
-    print('This mirror displays up to 1000 eligible photos in Aura API order; larger frames use a bounded selection.')
+    print('This mirror keeps a random sample of up to 10 photos, replaced hourly; old local copies are removed.')
     email = input('Aura account email: ').strip()
     password = getpass.getpass('Aura password: ')
     client = AuraClient()
@@ -355,6 +399,7 @@ def setup(config_dir=CONFIG, data=DEFAULT_DATA):
     except ValueError:
         raise AuraError('Invalid frame selection; no configuration saved') from None
     frame_id = frames[selected]['id']
+    trim_sample(Path(data) / 'photos')
     count = synchronize(client, frame_id, Path(data) / 'photos')
     atomic_json(config_dir / 'aura-session.json', {**client.session, 'frame_id': frame_id})
     path = config_dir / 'config.json'
@@ -362,18 +407,20 @@ def setup(config_dir=CONFIG, data=DEFAULT_DATA):
     config['photos'] = {'source': 'aura'}
     atomic_json(path, config)
     print(f'Aura connected. Published {count} photos. The Aura password was not saved.')
-    print('Large selections fill in batches during automatic sync; the dashboard labels this progress.')
+    print('Only the current ten-photo sample is retained locally.')
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('setup', 'sync'))
+    parser.add_argument('command', choices=('setup', 'sync', 'trim'))
     parser.add_argument('--data', type=Path, default=DEFAULT_DATA)
     parser.add_argument('--config-dir', type=Path, default=CONFIG)
     args = parser.parse_args()
     os.umask(0o077)
     try:
-        if args.command == 'setup':
+        if args.command == 'trim':
+            print('Local photo sample retained:', trim_sample(args.data / 'photos'))
+        elif args.command == 'setup':
             setup(args.config_dir, args.data)
         else:
             session = private_json(args.config_dir / 'aura-session.json')

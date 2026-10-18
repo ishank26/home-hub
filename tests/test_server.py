@@ -71,6 +71,20 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(status, 200, data)
         return json.loads(data)
 
+    def test_recipe_import_is_bounded_saved_and_reopened_without_fetch(self):
+        with patch.object(server, 'read_recipe') as read:
+            for i in range(7):
+                read.return_value={'title':'Synthetic recipe','url':'https://example.com/r'+str(i),
+                                   'ingredients':['one ingredient'],'steps':['one step']}
+                item=self.api('/api/recipes','POST',{'url':'https://example.com/r'+str(i)})
+                self.assertEqual(item['title'],'Synthetic recipe')
+            saved=self.api('/api/recipes')['recipes']
+            self.assertEqual(len(saved),5)
+            self.assertEqual(saved[0]['url'],'https://example.com/r6')
+            self.assertEqual(read.call_count,7)
+        status,_,_=self.request('/api/recipes','POST',{'url':'http://127.0.0.1'})
+        self.assertEqual(status,400)
+
     def test_get_endpoints_and_static(self):
         paths = ['/api/today', '/api/calendar?from=' + server.iso(server.now()),
                  '/api/shopping', '/api/weather', '/api/quotes', '/api/photos/manifest',

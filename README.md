@@ -185,7 +185,7 @@ and the mirror picks them up after sync. [Protocol and operation](docs/aura-prot
 
 Full backend/image tests: `~/.local/share/home-hub/aura-venv/bin/python -m unittest discover -s tests -v`.
 The normal stdlib-only test run skips the five Pillow-dependent test methods when
-Pillow is absent; the dedicated-runtime verification now runs 90 tests with no skips.
+Pillow is absent; the dedicated-runtime verification now runs 100 tests with no skips.
 Photo browser flow: `NODE_PATH=/tmp/home-hub-browser/node_modules node tests/ui-aura.cjs`.
 
 Camera browser flow: `NODE_PATH=/tmp/home-hub-browser/node_modules node tests/ui-camera.cjs`.
@@ -199,3 +199,17 @@ hidden local prompt, discovers official cloud light capabilities, and requires
 explicit selection of up to four lights. API keys stay in the private secrets
 file. This is an independent dashboard connector, not an installed HA custom
 integration. Browser QA: `NODE_PATH=/tmp/home-hub-browser/node_modules node tests/ui-govee.cjs`.
+
+
+Hourly photo sampling keeps only ten Aura photos plus thumbnails. Old local JPEG
+copies are removed after a successful sample replacement. Activate with the
+installed hourly Aura timer after owner-local `scripts/aura-setup`. See the current
+[photo storage policy](docs/aura-protocol.md#current-storage-policy--hourly-random-sample-2026-10-18).
+
+Recipes: open **Recipes**, paste a public HTTPS recipe URL, then choose **Focus
+mode**. Ingredients and numbered steps can be checked off; larger text and source
+sharing are available. **Reader link** opens directly in the clean reader on a
+browser already authorized for this private dashboard. Publisher pages must
+provide Schema.org Recipe JSON-LD; blocked/login-only pages are not bypassed.
+Only the five most recent extracted text recipes are stored, with no downloaded
+publisher images or page archives. Browser QA: `node tests/ui-recipes.cjs`.

@@ -142,3 +142,21 @@ New downloads stop after a 300-second budget (an in-flight request can finish);
 no empty partial result replaces an existing library. A failed download still
 retains the preceding publication. Initial setup now displays useful photos
 without waiting for the entire large selection.
+
+
+## Current storage policy — hourly random sample (2026-10-18)
+
+This supersedes the larger-window and incremental-gallery policies above. Every
+hour, the worker scans eligible photo metadata using reservoir sampling, downloads
+up to ten selected stills and publishes that complete sample. All pages are scanned
+(up to 100 pages / 10,000 distinct eligible photos); exceeding the scan budget fails
+without claiming a full-library sample. Hidden/unselected photos and non-Live
+videos are excluded. Originals remain in Aura. Only normalized display copies and
+thumbnails are downloaded, not a full gallery.
+
+After publication, old generated JPEGs are removed immediately. During a refresh,
+old and new samples may briefly coexist so a failed download retains a usable
+sample. The `trim` command migrates an existing large cache to ten published photos
+under the same sync lock. Stale browser URLs for retired photos return not found.
+A service failure retains the last ten and reports stale state; it does not grow
+an archive. The hourly timer requires the owner-local saved Aura session.

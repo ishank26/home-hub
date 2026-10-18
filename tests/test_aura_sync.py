@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-from aura_sync import AuraClient, AuraError, atomic_json, normalize, synchronize
+from aura_sync import AuraClient, AuraError, atomic_json, normalize, synchronize, trim_sample
 from photos import PhotoLibrary
 from integrations import SourceUnavailable
 
@@ -57,17 +57,20 @@ class ClientTests(unittest.TestCase):
             with self.assertRaisesRegex(AuraError, 'pagination'):
                 client.assets('frame-1')
 
-    def test_large_frame_uses_bounded_vendor_order_window(self):
+    def test_reservoir_sample_scans_all_pages_and_includes_late_photos(self):
         client = AuraClient()
         pages = [{'assets': [{'id': 'a' + str(i)} for i in range(start, start + 100)],
                   'next_page_cursor': 'page' + str(start)} for start in range(0, 1100, 100)]
-        with patch.object(client, '_api', side_effect=pages) as api:
+        pages[-1].pop('next_page_cursor')
+        with patch.object(client, '_api', side_effect=pages) as api, patch('aura_sync.random.SystemRandom') as rng:
+            rng.return_value.randrange.return_value = 0
             result = client.assets('synthetic-frame')
-        self.assertEqual(len(result), 1000)
-        self.assertEqual(api.call_count, 10)
-        self.assertEqual(result[0]['id'], 'a0')
-        self.assertEqual(result[-1]['id'], 'a999')
-        self.assertTrue(client.window_limited)
+        self.assertEqual(len(result), 10)
+        self.assertEqual(api.call_count, 11)
+        self.assertEqual(result[0]['id'], 'a1099')
+        self.assertEqual(len({a['id'] for a in result}), 10)
+        self.assertEqual(rng.return_value.randrange.call_args.args[0], 1100)
+        self.assertFalse(client.window_limited)
         with patch.object(client, '_api', return_value={'assets': [{'id': 'only'}]}):
             self.assertEqual(len(client.assets('synthetic-frame')), 1)
         self.assertFalse(client.window_limited)
@@ -200,6 +203,21 @@ class ImageSyncTests(unittest.TestCase):
                 self.assertFalse(PhotoLibrary(root).manifest()['syncPending'])
                 self.assertEqual(download.call_count, 3)
             self.assertEqual(len(PhotoLibrary(root).manifest()['photos']), 3)
+
+    def test_new_sample_deletes_old_copies_and_trim_migrates_large_cache(self):
+        client = AuraClient()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            assets = [{'id': 'old' + str(i)} for i in range(15)]
+            with patch.object(client, 'assets', return_value=assets), patch.object(client, 'image', return_value=self.image()), patch('aura_sync.MAX_NEW_PHOTOS', 15):
+                synchronize(client, 'frame-1', root)
+            self.assertEqual(trim_sample(root), 10)
+            self.assertEqual(len(list((root/'cache').glob('*.jpg'))), 20)
+            with patch.object(client, 'assets', return_value=[{'id':'fresh'}]), patch.object(client, 'image', return_value=self.image()):
+                synchronize(client, 'frame-1', root)
+            self.assertEqual(len(list((root/'cache').glob('*.jpg'))), 2)
+            self.assertEqual(len(PhotoLibrary(root).manifest()['photos']), 1)
+            self.assertEqual(PhotoLibrary(root).manifest()['sampling'], 'hourly-random')
 
     def test_corrupt_image_preserves_old_manifest(self):
         client = AuraClient()

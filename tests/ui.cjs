@@ -59,7 +59,7 @@ const { chromium } = require("playwright");
     await page.goto(base);
     await page.locator(".clock-big").waitFor();
     await page.evaluate(() => document.fonts.ready);
-    assert.equal(await page.locator(".rail-item").count(), 8);
+    assert.equal(await page.locator(".rail-item").count(), 9);
     assert.equal(
       await page
         .locator("#rail")
@@ -371,7 +371,7 @@ const { chromium } = require("playwright");
     assert.deepEqual(errors, []);
     assert.deepEqual(external, []);
     console.log(
-      "UI tests passed: eight views, mutations, injection, stale fallback, modals, saver, idle, night, admin hold, scaling.",
+      "UI tests passed: nine navigation entries, mutations, injection, stale fallback, modals, saver, idle, night, admin hold, scaling.",
     );
   } finally {
     if (browser) await browser.close();

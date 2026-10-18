@@ -27,7 +27,8 @@ class PhotoLibrary:
                 raise ValueError('manifest shape')
             if any(not isinstance(p, dict) or not PHOTO_ID.fullmatch(p.get('id', '')) for p in photos):
                 raise ValueError('photo id')
-            stale = (datetime.now(timezone.utc) - stamp).total_seconds() > 1800
+            max_age = 4500 if value.get('sampling') == 'hourly-random' else 1800
+            stale = (datetime.now(timezone.utc) - stamp).total_seconds() > max_age
             try:
                 status_path = self.directory / 'status.json'
                 if status_path.is_symlink() or status_path.stat().st_size > 16_000:
@@ -38,7 +39,8 @@ class PhotoLibrary:
                 stale = True
             return {'source': 'aura', 'state': 'stale' if stale else 'current',
                     'syncedAt': stamp.isoformat(), 'windowLimited': value.get('windowLimited') is True,
-                    'syncPending': value.get('syncPending') is True, 'collections': ['All', 'Aura'],
+                    'syncPending': value.get('syncPending') is True,
+                    'sampling': 'hourly-random' if value.get('sampling') == 'hourly-random' else None, 'collections': ['All', 'Aura'],
                     'photos': [{'id': p['id'], 'collections': ['All', 'Aura']} for p in photos]}
         except FileNotFoundError:
             return {'source': 'unconfigured', 'state': 'failed', 'syncedAt': None,

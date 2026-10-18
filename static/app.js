@@ -15,6 +15,7 @@
     photos: "Photos",
     home: "Smart Home",
     settings: "Settings",
+    recipes: "Recipes",
   };
   const svg = (content, size = 26) =>
     `<svg aria-hidden="true" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${content}</svg>`;
@@ -40,6 +41,7 @@
       '<circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"></path>',
     ),
   ];
+  icons.push(svg('<path d="M4 3h12a3 3 0 0 1 3 3v15H7a3 3 0 0 1-3-3V3zM7 17h12M8 7h7M8 11h5"></path>'));
   const esc = (value) =>
     String(value == null ? "" : value).replace(
       /[&<>"']/g,
@@ -431,6 +433,7 @@
   }
   async function navigate(view = state.view) {
     if (!names[view]) return;
+    stage.classList.remove("recipe-focus");
     const switched = state.view !== view;
     if (state.mode === "active" && switched)
       savedScroll.set(state.view, captureScroll());
@@ -806,6 +809,53 @@
       `<article class="quote-card"><span class="pill">${state.quoteIndex === r.data.todayIndex ? "Today's quote" : "From the collection"}</span><blockquote>${esc(q.text)}</blockquote><div class="a">${esc(q.author)}</div><div class="s">${esc(q.source)}</div></article><div class="center-row">${button(saved ? "Saved ✓" : "Save", "savequote", "btn", `aria-pressed="${saved}"`)}${button("Next quote →", "nextquote", "btn primary")}</div>`,
     );
   }
+  let recipeList = [], activeRecipe = null, recipeLarge = false, recipeFocus = false;
+  const recipeDone = new Set();
+  async function recipes(gen) {
+    const r = await request("/api/recipes");
+    if (!current(gen)) return;
+    recipeList = r.data.recipes;
+    drawRecipe();
+  }
+  function drawRecipe() {
+    const scroll = $(".recipe-scroll")?.scrollTop || 0;
+    stage.classList.toggle("recipe-focus", recipeFocus);
+    const r = activeRecipe;
+    const controls = r ? `<div class="recipe-tools">${button("← Recipes", "recipeback")}${button(recipeFocus ? "Exit focus" : "Focus mode", "recipefocus")}${button(recipeLarge ? "Normal text" : "Larger text", "recipefont")}${button("Share source", "recipeshare")}${button("Reader link", "recipelink")}</div>` : "";
+    const body = r ? `${controls}<article class="recipe-reader ${recipeLarge ? "recipe-large" : ""}"><p class="meta">${esc(new URL(r.url).hostname)}${r.yield ? " · Serves " + esc(r.yield) : ""}${r.totalTime ? " · " + esc(r.totalTime.replace(/^PT/, "").toLowerCase()) : ""}</p><h1>${esc(r.title)}</h1>${r.description ? `<p>${esc(r.description)}</p>` : ""}<h2>Ingredients</h2><div class="recipe-ingredients">${r.ingredients.map((x,i)=>button(`${recipeDone.has("i"+i) ? "✓ " : "○ "}${esc(x)}`, "recipecheck:i"+i, "recipe-line", `aria-pressed="${recipeDone.has("i"+i)}"`)).join("")}</div><h2>Method</h2>${r.steps.map((x,i)=>button(`<b>${i+1}.</b><span>${esc(x)}</span>`, "recipecheck:s"+i, "recipe-line recipe-step", `aria-pressed="${recipeDone.has("s"+i)}"`)).join("")}<p class="meta">Recipe text from the linked publisher. Use Share source for the original recipe.</p></article>` : `<div class="card recipe-intro"><h2>A little space to cook</h2><p>Paste a recipe link for clear ingredients and step-by-step cooking, without ads or popups.</p><form id="recipe-form"><label for="recipe-url">Recipe link</label><div class="recipe-input-row"><input id="recipe-url" name="url" type="url" required maxlength="4096" placeholder="https://…" autocomplete="off"><button class="btn primary" type="submit">Open recipe</button></div><p id="recipe-error" role="status"></p></form><p class="meta">Supports pages with structured recipe data. Your five most recent recipes stay on this server.</p></div><div class="recipe-saved">${recipeList.map((x,i)=>button(esc(x.title), "recipeopen:"+i, "btn")).join("")}</div>`;
+    frame("Recipes", {data:{}}, `<div class="recipe-scroll">${body}</div>`);
+    $(".recipe-scroll").scrollTop=scroll;
+  }
+  async function importRecipe(url) {
+    const form = $("#recipe-form"), submit = form && $("button",form);
+    if (submit) {submit.disabled=true;submit.textContent="Reading recipe…";}
+    const controller = new AbortController(), timeout=setTimeout(()=>controller.abort(), 10000);
+    const generation=state.generation;
+    try {
+      const response=await fetch("/api/recipes",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify({url}),signal:controller.signal});
+      const value=await response.json();
+      if (!response.ok) throw new Error(value.error || "Could not read this recipe");
+      if (!current(generation)) return;
+      activeRecipe=value;recipeDone.clear();recipeFocus=false;drawRecipe();
+    } catch(error) {
+      if (current(generation)) {
+        const message=error.name === "AbortError" ? "Recipe request timed out. Try again." : error.message;
+        if ($("#recipe-error")) $("#recipe-error").textContent=message;
+        else toast(message);
+      }
+    } finally {
+      clearTimeout(timeout);
+      if (submit && submit.isConnected) {submit.disabled=false;submit.textContent="Open recipe";}
+    }
+  }
+  async function shareRecipe(reader=false) {
+    const url=reader ? location.origin+"/?recipe="+encodeURIComponent(activeRecipe.url) : activeRecipe.url;
+    if (!reader && navigator.share) {
+      try {await navigator.share({title:activeRecipe.title,url});return;} catch(error) {if(error.name === "AbortError")return;}
+    }
+    modal(reader ? "Open in recipe reader" : "Share recipe", `<p>${reader ? "This link opens focus reading on a browser already allowed to access your dashboard." : "Copy this original recipe link into any browser or message."}</p><input class="recipe-share" aria-label="Recipe share link" value="${esc(url)}">${button("Copy link", "recipecopy")}`);
+    const input=$(".recipe-share");input.readOnly=true;input.focus();input.select();
+  }
   function photoURL(photo, thumbnail = false) {
     return `/photos/${encodeURIComponent(photo.id)}${/^p\d{2}$/.test(photo.id) ? ".svg" : thumbnail ? ".thumb" : ""}`;
   }
@@ -833,7 +883,7 @@
     frame(
       "Photos",
       r,
-      `<div class="quick">${r.data.collections.map((c, i) => button(esc(c), `collection:${i}`, "chip", `aria-pressed="${state.collection === c}"`)).join("")}<span class="meta">${list.length} photos${r.data.syncPending ? " · syncing more photos" : ""}${r.data.windowLimited ? " · bounded selection" : ""} · ${r.data.syncedAt ? "Synced " + esc(time(r.data.syncedAt)) : "Not synced yet"}</span></div><div class="photo-grid">${list.map((p, i) => button(`<img src="${photoURL(p, true)}" alt="Photo ${i + 1}" loading="lazy" decoding="async">`, `photo:${i}`, "")).join("") || '<div class="empty">No photos in this collection</div>'}</div>`,
+      `<div class="quick">${r.data.collections.map((c, i) => button(esc(c), `collection:${i}`, "chip", `aria-pressed="${state.collection === c}"`)).join("")}<span class="meta">${list.length} photos${r.data.sampling === "hourly-random" ? " · random sample · refreshes hourly" : ""}${r.data.syncPending ? " · syncing more photos" : ""}${r.data.windowLimited ? " · bounded selection" : ""} · ${r.data.syncedAt ? "Synced " + esc(time(r.data.syncedAt)) : "Not synced yet"}</span></div><div class="photo-grid">${list.map((p, i) => button(`<img src="${photoURL(p, true)}" alt="Photo ${i + 1}" loading="lazy" decoding="async">`, `photo:${i}`, "")).join("") || '<div class="empty">No photos in this collection</div>'}</div>`,
       button(
         "Start slideshow",
         "slideshow",
@@ -1209,6 +1259,7 @@
             : r.data.source === "sample"
               ? "Sample photos"
               : r.data.source === "unconfigured" ? "Aura photos need setup"
+                : r.data.sampling === "hourly-random" ? "Aura photos · hourly random sample"
                 : r.data.syncPending ? "Aura photos · syncing more photos"
                 : r.data.windowLimited ? "Aura photos · 1,000-photo selection" : "Aura photos";
           if (!saverPhotos.length) {
@@ -1278,6 +1329,7 @@
       else if (state.mode === "night" && !quiet()) enterSaver();
       return;
     }
+    if (state.view === "recipes" && stage.classList.contains("recipe-focus")) return;
     const elapsed = Date.now() - state.lastInput,
       returnMs = state.settings.returnTodayMinutes * 60000;
     if (state.view !== "today" && elapsed >= returnMs) {
@@ -1335,6 +1387,7 @@
     }
   }
   const renders = {
+    recipes,
     today,
     calendar,
     shopping,
@@ -1347,6 +1400,19 @@
 
   async function action(value) {
     const [kind, arg, delta] = value.split(":");
+    if (kind === "recipeback") {activeRecipe=null;recipeFocus=false;recipeDone.clear();return navigate("recipes");}
+    if (kind === "recipeopen") {activeRecipe=recipeList[Number(arg)];recipeDone.clear();return drawRecipe();}
+    if (kind === "recipefocus") {recipeFocus=!recipeFocus;return drawRecipe();}
+    if (kind === "recipefont") {recipeLarge=!recipeLarge;return drawRecipe();}
+    if (kind === "recipecheck") {recipeDone.has(arg) ? recipeDone.delete(arg) : recipeDone.add(arg);return drawRecipe();}
+    if (kind === "recipeshare") return shareRecipe();
+    if (kind === "recipelink") return shareRecipe(true);
+    if (kind === "recipecopy") {
+      const input=$(".recipe-share");input.focus();input.select();
+      let copied=false;
+      try {if(navigator.clipboard && window.isSecureContext){await navigator.clipboard.writeText(input.value);copied=true;}else copied=document.execCommand("copy");}catch{}
+      return toast(copied ? "Link copied" : "Link selected · use your browser’s Copy command");
+    }
     if (kind === "nav") return navigate(arg);
     if (kind === "refresh") return navigate();
     if (kind === "close") return closeModal();
@@ -1548,6 +1614,7 @@
     else if (e.target.classList.contains("modal-back")) closeModal();
   });
   document.addEventListener("submit", (e) => {
+    if (e.target.id === "recipe-form") {e.preventDefault();importRecipe(new FormData(e.target).get("url"));return;}
     if (e.target.id !== "add-form") return;
     e.preventDefault();
     const form = e.target,
@@ -1671,7 +1738,9 @@
   }
   async function start() {
     await loadSettings();
-    await navigate("today");
+    const recipeURL=new URLSearchParams(location.search).get("recipe");
+    await navigate(recipeURL ? "recipes" : "today");
+    if(recipeURL) {await importRecipe(recipeURL);if(activeRecipe){recipeFocus=true;drawRecipe();}}
     refreshCommon();
     setInterval(() => refreshCommon(true), 60000);
     // After a cold start without the server (e.g. the frame booted first), retry

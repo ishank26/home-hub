@@ -33,6 +33,7 @@ from camera_stream import LiveCamera
 from govee import from_config as govee_from_config
 from integrations import CameraInactive, SourceUnavailable, from_config, private_json
 from photos import PhotoLibrary
+from recipes import read_recipe
 from weather import Weather, empty_weather
 from shopping import ShoppingBridge
 
@@ -488,6 +489,8 @@ def make_handler(hub, allowed, token=None):
                         start = start.astimezone()
                     days = max(1, min(42, int(params.get('days', '3'))))
                     self.reply(hub.calendar(start, start + timedelta(days=days)))
+                elif path == '/api/recipes':
+                    self.reply({'recipes': hub.store.read('recipes', [])})
                 elif path == '/api/shopping':
                     self.reply(hub.shopping())
                 elif path == '/api/weather':
@@ -558,7 +561,18 @@ def make_handler(hub, allowed, token=None):
                 return
             try:
                 body = self.body()
-                if self.path == '/api/shopping':
+                if self.path == '/api/recipes':
+                    try:
+                        recipe = read_recipe(body.get('url'))
+                    except ValueError as error:
+                        return self.reply({'error': str(error)}, 400)
+                    recipe['id'] = uuid.uuid4().hex[:12]
+                    with LOCK:
+                        saved = hub.store.read('recipes', [])
+                        saved = [recipe] + [r for r in saved if r.get('url') != recipe['url']]
+                        hub.store.write('recipes', saved[:5])
+                    self.reply(recipe)
+                elif self.path == '/api/shopping':
                     name, qty, category, notes = clean_item(body)
                     item = {'id': uuid.uuid4().hex[:12], 'name': name, 'qty': qty, 'category': category,
                             'notes': notes, 'done': False, 'created': iso(now())}

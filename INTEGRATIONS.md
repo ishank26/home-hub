@@ -331,3 +331,30 @@ before confirmation. In-flight old reads cannot overwrite a confirmed command.
 This connects bulbs to the dashboard; it does not create HA bulb entities.
 Eight focused backend tests and the browser fixture cover cloud outages, expired
 state, command confirmation, provider rate limits, key isolation and Home latency.
+
+
+## Recipe reader research and implementation — 2026-10-18
+
+Researched [recipe-scrapers](https://github.com/recipe-scrapers/recipe-scrapers),
+the [Python original](https://github.com/hhursev/recipe-scrapers), and
+[Mozilla Readability](https://github.com/mozilla/readability). Recipe-specific
+Schema.org JSON-LD gives ingredients and ordered steps; general article extraction
+can lose that structure and requires HTML sanitization. The implementation uses a
+small independent stdlib parser for those structured fields. No third-party code
+was copied or installed and no publisher HTML is rendered in the dashboard.
+
+Fixed public HTTPS reads validate every resolved address and redirect, pin the
+connection address, retain TLS hostname verification, reject internal/mapped IPs,
+URL credentials and custom ports, and send no browser cookies or server secrets.
+Concurrency, DNS jobs, redirects, response bytes, timeout and parser traversal are
+bounded. Images/scripts/ads are not downloaded or executed by the browser. Five
+recent extracted text recipes are kept in private runtime storage. Reader deep
+links retain existing dashboard admission; this does not expose the hub publicly.
+
+Synthetic HTTP/browser checks cover paste → import → focus → font changes → step
+check-off → share/copy → reader deep link on desktop and mobile. Live structured
+extraction succeeded on Love and Lemons' pancakes page (eight ingredients/five
+steps). Budget Bytes refused automated access and the tested Good Food Middle
+East page provided no supported metadata; both return honest errors. Site-specific
+scrapers, login/paywall access and native iPhone share-target enrollment are not
+implemented. Use the share link or paste a browser URL into Recipes.
