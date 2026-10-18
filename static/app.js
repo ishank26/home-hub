@@ -11,7 +11,6 @@
     calendar: "Calendar",
     shopping: "Shopping",
     weather: "Weather",
-    quotes: "Quotes",
     photos: "Photos",
     home: "Smart Home",
     settings: "Settings",
@@ -32,7 +31,6 @@
       '<path d="M3 4h2l2.5 11h11L21 7H6.5"></path><circle cx="9" cy="19" r="1.5"></circle><circle cx="17" cy="19" r="1.5"></circle>',
     ),
     svg(sun),
-    svg('<path d="M7 7h4v4c0 3-2 5-4 6M15 7h4v4c0 3-2 5-4 6"></path>'),
     svg(
       '<rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="9" cy="10" r="2"></circle><path d="M21 17l-5-5-9 8"></path>',
     ),
@@ -77,6 +75,7 @@
       "HEADER",
       "FORM",
       "INPUT",
+      "TEXTAREA",
       "SELECT",
       "OPTION",
       "LABEL",
@@ -98,6 +97,7 @@
       "value",
       "placeholder",
       "maxlength",
+      "rows",
       "required",
       "autocomplete",
       "disabled",
@@ -151,7 +151,7 @@
         } else if (
           attr.name === "src" &&
           node.tagName === "IMG" &&
-          /^\/photos\/[A-Za-z0-9_%.-]+$/.test(attr.value)
+          (/^\/photos\/[A-Za-z0-9_%.-]+$/.test(attr.value) || window.HubPhotoCache?.hasURL(attr.value))
         ) {
           /* same-origin opaque photo only */
         } else if (
@@ -187,8 +187,6 @@
     calDate: midnight(new Date()),
     filters: new Set(),
     collection: "All",
-    quoteIndex: null,
-    favorites: [],
     shoppingBusy: new Set(),
     shoppingErrors: new Map(),
     homeBusy: false,
@@ -208,16 +206,6 @@
       ? `${hour.kind === "snow" ? "Snow" : "Rain"} from ${time(hour.time)} · ${hour.pop == null ? "" : hour.pop + "%"}`
       : "";
   }
-  try {
-    const saved = JSON.parse(
-      localStorage.getItem("hub.quoteFavorites") || "[]",
-    );
-    if (Array.isArray(saved))
-      state.favorites = saved.filter((x) => typeof x === "string");
-  } catch {
-    /* storage may be disabled */
-  }
-
   function midnight(d) {
     const value = new Date(d);
     value.setHours(0, 0, 0, 0);
@@ -523,7 +511,7 @@
     frame(
       "Today",
       result,
-      `<div class="today-top"><div><div class="clock-big" data-clock></div><div class="date-big" data-date></div></div>${button(`<span style="font-size:64px" aria-hidden="true">${wxIcon(w.kind, 64)}</span><span><span class="t">${temp(w.temp)}</span><br><span class="s">${esc(w.summary)} · H ${temp(d.weather.daily[0]?.hi)} L ${temp(d.weather.daily[0]?.lo)}</span><br><span class="r">${esc(rainWindow(d.weather))}</span></span>`, "nav:weather", "wx-tile")}</div><div class="today-grid"><article class="card"><div class="card-head"><h2>Next up</h2>${button("Calendar ›", "nav:calendar", "link")}</div>${d.events.length ? d.events.map((e) => `<button class="ev-row item" data-action="event:${esc(e.id)}"><span class="time">${esc(time(e.start))}</span><i class="dot d-${color(e.calendar, d.calendars)}"></i><span class="title">${esc(e.title)}<span>${esc((d.calendars.find((c) => c.id === e.calendar) || {}).name)}</span></span><span class="pill ${d.events[0] === e ? "hot" : ""}" data-relative="${esc(e.id)}">${relative(e.start, e.end)}</span></button>`).join("") : `<div class="empty">${d.calendarSource === 'unconfigured' ? 'Calendar needs setup' : d.calendarSource === 'failed' ? 'Calendar unavailable' : 'Nothing coming up'}</div>`}</article><article class="card today-shopping" data-action="nav:shopping"><div class="card-head"><h2>Shopping</h2>${button("Open list ›", "nav:shopping", "link")}</div><div class="shop-count">${d.shoppingSource === "failed" ? "—" : d.shoppingOpen} <span>${d.shoppingSource === "failed" ? "Shopping unavailable" : "open items"}</span></div>${d.shoppingTop.map((i) => `<div class="mini-row row-line">${esc(i.name)}<span>${esc(i.qty)}</span></div>`).join("")}${d.shoppingOpen > 3 ? `<p class="meta">+ ${d.shoppingOpen - 3} more</p>` : ""}</article></div>${button(`<q>${esc(d.quote.text)}</q><span>— ${esc(d.quote.author)}</span>`, "nav:quotes", "quote-line")}`,
+      `<div class="today-top"><div><div class="clock-big" data-clock></div><div class="date-big" data-date></div></div>${button(`<span style="font-size:64px" aria-hidden="true">${wxIcon(w.kind, 64)}</span><span><span class="t">${temp(w.temp)}</span><br><span class="s">${esc(w.summary)} · H ${temp(d.weather.daily[0]?.hi)} L ${temp(d.weather.daily[0]?.lo)}</span><br><span class="r">${esc(rainWindow(d.weather))}</span></span>`, "nav:weather", "wx-tile")}</div><div class="today-grid"><article class="card"><div class="card-head"><h2>Next up</h2>${button("Calendar ›", "nav:calendar", "link")}</div>${d.events.length ? d.events.map((e) => `<button class="ev-row item" data-action="event:${esc(e.id)}"><span class="time">${esc(time(e.start))}</span><i class="dot d-${color(e.calendar, d.calendars)}"></i><span class="title">${esc(e.title)}<span>${esc((d.calendars.find((c) => c.id === e.calendar) || {}).name)}</span></span><span class="pill ${d.events[0] === e ? "hot" : ""}" data-relative="${esc(e.id)}">${relative(e.start, e.end)}</span></button>`).join("") : `<div class="empty">${d.calendarSource === 'unconfigured' ? 'Calendar needs setup' : d.calendarSource === 'failed' ? 'Calendar unavailable' : 'Nothing coming up'}</div>`}</article><article class="card today-shopping" data-action="nav:shopping"><div class="card-head"><h2>Shopping</h2>${button("Open list ›", "nav:shopping", "link")}</div><div class="shop-count">${d.shoppingSource === "failed" ? "—" : d.shoppingOpen} <span>${d.shoppingSource === "failed" ? "Shopping unavailable" : "open items"}</span></div>${d.shoppingTop.map((i) => `<div class="mini-row row-line">${esc(i.name)}<span>${esc(i.qty)}</span></div>`).join("")}${d.shoppingOpen > 3 ? `<p class="meta">+ ${d.shoppingOpen - 3} more</p>` : ""}</article></div><div class="quote-line"><q>${esc(d.quote.text)}</q><span>— ${esc(d.quote.author)}</span></div>`,
     );
     updateClocks();
     later(updateClocks, 1000);
@@ -792,62 +780,87 @@
       `${d.location || ""}${d.observedAt ? " · Observed " + time(d.observedAt) : ""}${d.forecastAt ? " · Retrieved " + time(d.forecastAt) : ""} · ${d.provider || "Select your weather location on the server"}`;
     $(".head .sub").classList.add("meta");
   }
-  async function quotes(gen) {
-    const r = await request("/api/quotes");
-    if (!current(gen)) return;
-    state.quotes = r;
-    if (state.quoteIndex === null) state.quoteIndex = r.data.todayIndex;
-    drawQuote();
-  }
-  function drawQuote() {
-    const r = state.quotes,
-      q = r.data.quotes[state.quoteIndex % r.data.quotes.length],
-      saved = state.favorites.includes(q.text);
-    frame(
-      "Quotes",
-      r,
-      `<article class="quote-card"><span class="pill">${state.quoteIndex === r.data.todayIndex ? "Today's quote" : "From the collection"}</span><blockquote>${esc(q.text)}</blockquote><div class="a">${esc(q.author)}</div><div class="s">${esc(q.source)}</div></article><div class="center-row">${button(saved ? "Saved ✓" : "Save", "savequote", "btn", `aria-pressed="${saved}"`)}${button("Next quote →", "nextquote", "btn primary")}</div>`,
-    );
-  }
   let recipeList = [], activeRecipe = null, recipeLarge = false, recipeFocus = false;
+  let recipeTab = 'saved', recipeQuery = '', recipeEditing = false, recipeBusy = false;
   const recipeDone = new Set();
+  async function recipeAPI(path, method='GET', body) {
+    const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),10000);
+    try {
+      const response=await fetch(path,{method,headers:{'Content-Type':'application/json'},credentials:'same-origin',cache:'no-store',body:body ? JSON.stringify(body) : undefined,signal:controller.signal});
+      const data=await response.json();
+      if(!response.ok) throw new Error(data.error || 'Recipe request failed');
+      return data;
+    } finally {clearTimeout(timer);}
+  }
   async function recipes(gen) {
-    const r = await request("/api/recipes");
+    const data=await recipeAPI('/api/recipes');
     if (!current(gen)) return;
-    recipeList = r.data.recipes;
+    recipeList=data.recipes;
+    if ((recipeEditing || recipeBusy) && $(".recipe-scroll")) return;
     drawRecipe();
   }
+  function recipeCards() {
+    const rows=recipeList.filter(r=>(recipeTab==='recent' ? !r.saved : r.saved) && (r.title+' '+r.tags.join(' ')).toLowerCase().includes(recipeQuery.toLowerCase()));
+    return rows.map(r=>button(`<b>${esc(r.title)}</b><span class="meta">${esc([r.yield ? 'Serves '+r.yield : '',r.totalTime,r.tags.join(' · ')].filter(Boolean).join(' · '))}</span>`, 'recipeopen:'+r.id, 'recipe-card')).join('') || '<p class="empty">'+(recipeQuery ? 'No matching recipes' : recipeTab==='recent' ? 'No recent previews' : 'Your saved recipes will appear here')+'</p>';
+  }
+  function recipeEditor() {
+    const r=activeRecipe || {};
+    const field=(name,label,limit,rows=0)=>`<label for="edit-${name}">${label}</label>${rows ? `<textarea id="edit-${name}" name="${name}" rows="${rows}" maxlength="${limit}">${esc(Array.isArray(r[name]) ? r[name].join('\n') : r[name]||'')}</textarea>` : `<input id="edit-${name}" name="${name}" maxlength="${limit}" value="${esc(name==='tags' ? (r.tags||[]).join(', ') : r[name]||'')}" ${name==='title' ? 'required' : ''}>`}`;
+    return `<div class="recipe-tools">${button('Cancel','recipecancel')}</div><form id="recipe-edit-form" class="recipe-editor card"><h1>${r.id ? 'Edit recipe' : 'New recipe'}</h1>${field('title','Recipe title',200)}${field('yield','Servings',80)}${field('totalTime','Time',80)}${field('description','Description',2000,3)}${field('ingredients','Ingredients — one per line',12000,6)}${field('steps','Steps — one per line',16000,7)}${field('tags','Tags — separated by commas',600)}${field('notes','Personal notes',4000,4)}${field('url','Source link (optional HTTPS)',4096)}<p id="recipe-error" role="status"></p><button class="btn primary" type="submit">Save changes</button></form>`;
+  }
   function drawRecipe() {
-    const scroll = $(".recipe-scroll")?.scrollTop || 0;
-    stage.classList.toggle("recipe-focus", recipeFocus);
-    const r = activeRecipe;
-    const controls = r ? `<div class="recipe-tools">${button("← Recipes", "recipeback")}${button(recipeFocus ? "Exit focus" : "Focus mode", "recipefocus")}${button(recipeLarge ? "Normal text" : "Larger text", "recipefont")}${button("Share source", "recipeshare")}${button("Reader link", "recipelink")}${button("Browse source", "recipevisit")}</div>` : "";
-    const body = r ? `${controls}<article class="recipe-reader ${recipeLarge ? "recipe-large" : ""}"><p class="meta">${esc(new URL(r.url).hostname)}${r.yield ? " · Serves " + esc(r.yield) : ""}${r.totalTime ? " · " + esc(r.totalTime.replace(/^PT/, "").toLowerCase()) : ""}</p><h1>${esc(r.title)}</h1>${r.description ? `<p>${esc(r.description)}</p>` : ""}<h2>Ingredients</h2><div class="recipe-ingredients">${r.ingredients.map((x,i)=>button(`${recipeDone.has("i"+i) ? "✓ " : "○ "}${esc(x)}`, "recipecheck:i"+i, "recipe-line", `aria-pressed="${recipeDone.has("i"+i)}"`)).join("")}</div><h2>Method</h2>${r.steps.map((x,i)=>button(`<b>${i+1}.</b><span>${esc(x)}</span>`, "recipecheck:s"+i, "recipe-line recipe-step", `aria-pressed="${recipeDone.has("s"+i)}"`)).join("")}<p class="meta">Recipe text from the linked publisher. Use Share source for the original recipe.</p></article>` : `<div class="card recipe-intro"><h2>Find something to cook</h2><p>Search the web, open a recipe, then tap <b>Read recipe</b> in the tablet browser.</p><form id="recipe-search-form"><label for="recipe-search">Search recipes or enter a website</label><div class="recipe-input-row"><input id="recipe-search" name="query" maxlength="2048" placeholder="Try: easy vegetarian dinner" autocomplete="off"><button class="btn primary" type="submit">Search / Browse</button></div></form><p class="meta">Search uses DuckDuckGo. ${button("Open browser", "recipebrowse", "link")}</p><form id="recipe-form"><label for="recipe-url">Or paste a recipe link</label><div class="recipe-input-row"><input id="recipe-url" name="url" type="url" required maxlength="4096" placeholder="https://…" autocomplete="off"><button class="btn primary" type="submit">Open recipe</button></div><p class="meta">To paste: press and hold the link field, then choose Paste.</p><p id="recipe-error" role="status"></p></form><p class="meta">Supports pages with structured recipe data. Your five most recent recipes stay on this server.</p></div><div class="recipe-saved">${recipeList.map((x,i)=>button(esc(x.title), "recipeopen:"+i, "btn")).join("")}</div>`;
-    frame("Recipes", {data:{}}, `<div class="recipe-scroll">${body}</div>`);
-    $(".recipe-scroll").scrollTop=scroll;
+    const scroll=$('.recipe-scroll')?.scrollTop||0, r=activeRecipe;
+    stage.classList.toggle('recipe-focus',recipeFocus);
+    const controls=r ? `<div class="recipe-tools">${button('← Recipes','recipeback')}${r.saved ? '<span class="pill">Saved ✓</span>' : button('Save recipe','recipesave','btn primary')}${button('Edit','recipeedit')}${button('Delete','recipedelete')}${button(recipeFocus ? 'Exit focus' : 'Focus mode','recipefocus')}${button(recipeLarge ? 'Normal text' : 'Larger text','recipefont')}${r.url ? button('Share source','recipeshare')+button('Browse source','recipevisit') : ''}${button('Reader link','recipelink')}</div>` : '';
+    const source=r?.url ? new URL(r.url).hostname : 'Your recipe';
+    let body=recipeEditing ? recipeEditor() : r ? `${controls}<article class="recipe-reader ${recipeLarge ? 'recipe-large' : ''}"><p class="meta">${esc(source)}${r.yield ? ' · Serves '+esc(r.yield) : ''}${r.totalTime ? ' · '+esc(r.totalTime.replace(/^PT/,'').toLowerCase()) : ''}</p><h1>${esc(r.title)}</h1>${r.description ? `<p>${esc(r.description)}</p>` : ''}${r.tags.length ? `<p class="meta">${esc(r.tags.join(' · '))}</p>` : ''}<h2>Ingredients</h2><div class="recipe-ingredients">${r.ingredients.map((x,i)=>button(`${recipeDone.has('i'+i) ? '✓ ' : '○ '}${esc(x)}`,'recipecheck:i'+i,'recipe-line',`aria-pressed="${recipeDone.has('i'+i)}"`)).join('')}</div><h2>Method</h2>${r.steps.map((x,i)=>button(`<b>${i+1}.</b><span>${esc(x)}</span>`,'recipecheck:s'+i,'recipe-line recipe-step',`aria-pressed="${recipeDone.has('s'+i)}"`)).join('')}${r.notes ? `<h2>Personal notes</h2><p class="recipe-notes">${esc(r.notes)}</p>` : ''}${r.url ? '<p class="meta">Source: '+esc(r.url)+'. Use Share source for the original recipe.</p>' : ''}</article>` : `<div class="recipe-library"><div class="recipe-tools">${button('Saved','recipetab:saved','chip',`aria-pressed="${recipeTab==='saved'}"`)}${button('Find on web','recipetab:find','chip',`aria-pressed="${recipeTab==='find'}"`)}${button('Recent','recipetab:recent','chip',`aria-pressed="${recipeTab==='recent'}"`)}${button('New recipe','recipenew','btn primary')}${button('Open Recipe Tracker','recipetracker')}</div>${recipeTab==='find' ? `<div class="card recipe-intro"><h2>Find something to cook</h2><p>Search the web, open a recipe, then tap <b>Read recipe</b> in the tablet browser.</p><form id="recipe-search-form"><label for="recipe-search">Search recipes or enter a website</label><div class="recipe-input-row"><input id="recipe-search" name="query" maxlength="2048" placeholder="Try: easy vegetarian dinner" autocomplete="off"><button class="btn primary" type="submit">Search / Browse</button></div></form><p class="meta">Search uses DuckDuckGo. ${button('Open browser','recipebrowse','link')}</p><form id="recipe-form"><label for="recipe-url">Or paste a recipe link</label><div class="recipe-input-row"><input id="recipe-url" name="url" type="url" required maxlength="4096" placeholder="https://…" autocomplete="off"><button class="btn primary" type="submit">Open recipe</button></div><p class="meta">To paste: press and hold the link field, then choose Paste.</p><p id="recipe-error" role="status"></p></form><p class="meta">Open a preview, then tap Save recipe to keep it.</p></div>` : `<label for="recipe-filter">Search ${recipeTab==='recent' ? 'recent previews' : 'saved recipes'}</label><input id="recipe-filter" class="recipe-filter" value="${esc(recipeQuery)}" maxlength="200" placeholder="Search titles or tags"><p class="meta">${recipeList.filter(x=>x.saved).length} / 200 saved · Stored on this server · Five recent previews retained</p><div class="recipe-cards">${recipeCards()}</div>`}<p class="meta">Recipe Tracker runs locally with its own browser library; it does not sync with this catalog.</p></div>`;
+    frame('Recipes',{data:{}},`<div class="recipe-scroll">${body}</div>`);
+    $('.recipe-scroll').scrollTop=scroll;
+  }
+  async function openRecipe(id) {
+    const gen=state.generation;
+    try {
+      const recipe=await recipeAPI('/api/recipes/'+id);
+      if(!current(gen)) return;
+      activeRecipe=recipe;recipeEditing=false;recipeDone.clear();drawRecipe();
+    } catch(error) {if(current(gen))toast(error.message);}
+  }
+  async function recipeWrite(method,body) {
+    if(recipeBusy) return;
+    recipeBusy=true;
+    const gen=state.generation, id=activeRecipe?.id;
+    const submit=$('#recipe-edit-form button[type="submit"]');if(submit)submit.disabled=true;
+    try {
+      const result=await recipeAPI('/api/recipes'+(method==='POST' ? '' : '/'+id),method,body);
+      if(!current(gen))return;
+      activeRecipe=method==='DELETE' ? null : result;recipeEditing=false;recipeDone.clear();
+      recipeList=recipeList.filter(r=>r.id!==(id||result.id));
+      if(method!=='DELETE')recipeList.unshift(result);
+      if(method==='DELETE'){recipeFocus=false;closeModal();}
+      drawRecipe();toast(method==='DELETE' ? 'Recipe deleted' : 'Recipe saved');
+      // The mutation has completed. A failed optional refresh cannot undo it.
+      try {
+        const list=await recipeAPI('/api/recipes');if(!current(gen))return;
+        recipeList=list.recipes;
+      } catch {if(current(gen))toast('Recipe '+(method==='DELETE' ? 'deleted' : 'saved')+'. Catalog refresh unavailable; retry later.');}
+    } catch(error) {
+      if(current(gen)) {if($('#recipe-error'))$('#recipe-error').textContent=error.message;else toast(error.message);}
+    } finally {recipeBusy=false;if(submit?.isConnected)submit.disabled=false;}
   }
   async function importRecipe(url) {
-    const form = $("#recipe-form"), submit = form && $("button",form);
-    if (submit) {submit.disabled=true;submit.textContent="Reading recipe…";}
-    const controller = new AbortController(), timeout=setTimeout(()=>controller.abort(), 10000);
-    const generation=state.generation;
+    const form=$('#recipe-form'), submit=form && $('button',form), gen=state.generation;
+    if(submit){submit.disabled=true;submit.textContent='Reading recipe…';}
     try {
-      const response=await fetch("/api/recipes",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",body:JSON.stringify({url}),signal:controller.signal});
-      const value=await response.json();
-      if (!response.ok) throw new Error(value.error || "Could not read this recipe");
-      if (!current(generation)) return;
-      activeRecipe=value;recipeDone.clear();recipeFocus=false;drawRecipe();
+      const recipe=await recipeAPI('/api/recipes','POST',{url});
+      if(!current(gen))return;
+      activeRecipe=recipe;recipeEditing=false;recipeDone.clear();recipeFocus=false;drawRecipe();
     } catch(error) {
-      if (current(generation)) {
-        const message=error.name === "AbortError" ? "Recipe request timed out. Try again." : error.message;
-        if ($("#recipe-error")) $("#recipe-error").textContent=message;
-        else toast(message);
-      }
-    } finally {
-      clearTimeout(timeout);
-      if (submit && submit.isConnected) {submit.disabled=false;submit.textContent="Open recipe";}
-    }
+      if(current(gen)){const message=error.name==='AbortError' ? 'Recipe request timed out. Try again.' : error.message;if($('#recipe-error'))$('#recipe-error').textContent=message;else toast(message);}
+    } finally {if(submit?.isConnected){submit.disabled=false;submit.textContent='Open recipe';}}
   }
+  document.addEventListener('input',e=>{
+    if(e.target.id==='recipe-filter'){recipeQuery=e.target.value;renderHTML($('.recipe-cards'),recipeCards());}
+  });
   function browseRecipes(query = "") {
     const text=String(query).trim().slice(0,2048);
     if (navigator.userAgent.includes("HomeHubKiosk/")) {
@@ -866,7 +879,7 @@
     toast("Copy the recipe address, return here, and paste it into Recipe link",null,"Undo",9000);
   }
   async function shareRecipe(reader=false) {
-    const url=reader ? location.origin+"/?recipe="+encodeURIComponent(activeRecipe.url) : activeRecipe.url;
+    const url=reader ? location.origin+"/?recipeId="+encodeURIComponent(activeRecipe.id) : activeRecipe.url;
     if (!reader && navigator.share) {
       try {await navigator.share({title:activeRecipe.title,url});return;} catch(error) {if(error.name === "AbortError")return;}
     }
@@ -874,10 +887,26 @@
     const input=$(".recipe-share");input.readOnly=true;input.focus();input.select();
   }
   function photoURL(photo, thumbnail = false) {
+    const local=window.HubPhotoCache?.url(photo.id,thumbnail);
+    if(local)return local;
     return `/photos/${encodeURIComponent(photo.id)}${/^p\d{2}$/.test(photo.id) ? ".svg" : thumbnail ? ".thumb" : ""}`;
   }
   async function readPhotos() {
-    const r = await request("/api/photos/manifest");
+    let stored=null;
+    try {stored=await window.HubPhotoCache?.load();} catch {/* network display still works */}
+    let r;
+    try {r=await request("/api/photos/manifest");}
+    catch(error) {
+      try{stored=await window.HubPhotoCache?.load();}catch{stored=null;}
+      if(!stored)throw error;
+      r={data:stored.manifest,stale:true,at:stored.storedAt};
+    }
+    if(r.data.source!=='aura' && !r.stale) {try{await window.HubPhotoCache?.clear();}catch{/* do not show disabled photo data */}}
+    if(r.data.source==='aura') {
+      window.HubPhotoCache?.sync(r.data).catch(()=>{/* preserve the previous complete device sample */});
+      // Online manifests can be larger; only 300 are kept on the tablet.
+      r={...r,data:{...r.data,photos:r.data.photos.slice(0,300)}};
+    }
     r.stale = r.stale || r.data.state === "stale";
     if (r.stale && r.data.syncedAt) r.at = Date.parse(r.data.syncedAt);
     if (!r.data.collections.includes(state.collection)) state.collection = "All";
@@ -900,7 +929,7 @@
     frame(
       "Photos",
       r,
-      `<div class="quick">${r.data.collections.map((c, i) => button(esc(c), `collection:${i}`, "chip", `aria-pressed="${state.collection === c}"`)).join("")}<span class="meta">${list.length} photos${r.data.sampling === "hourly-random" ? " · random sample · refreshes hourly" : ""}${r.data.syncPending ? " · syncing more photos" : ""}${r.data.windowLimited ? " · bounded selection" : ""} · ${r.data.syncedAt ? "Synced " + esc(time(r.data.syncedAt)) : "Not synced yet"}</span></div><div class="photo-grid">${list.map((p, i) => button(`<img src="${photoURL(p, true)}" alt="Photo ${i + 1}" loading="lazy" decoding="async">`, `photo:${i}`, "")).join("") || '<div class="empty">No photos in this collection</div>'}</div>`,
+      `<div class="quick">${r.data.collections.map((c, i) => button(esc(c), `collection:${i}`, "chip", `aria-pressed="${state.collection === c}"`)).join("")}<span class="meta">${list.length} photos${r.data.sampling === "hourly-random" ? " · random sample · refreshes hourly" : ""}${r.data.syncPending ? " · syncing more photos" : ""}${r.data.windowLimited ? " · bounded selection" : ""} · ${window.HubPhotoCache?.info()?.count || 0} saved on tablet · ${r.data.syncedAt ? "Synced " + esc(time(r.data.syncedAt)) : "Not synced yet"}</span></div><div class="photo-grid">${list.map((p, i) => button(`<img src="${photoURL(p, true)}" alt="Photo ${i + 1}" loading="lazy" decoding="async">`, `photo:${i}`, "")).join("") || '<div class="empty">No photos in this collection</div>'}</div>`,
       button(
         "Start slideshow",
         "slideshow",
@@ -1346,7 +1375,7 @@
       else if (state.mode === "night" && !quiet()) enterSaver();
       return;
     }
-    if (state.view === "recipes" && stage.classList.contains("recipe-focus")) return;
+    if (state.view === "recipes" && (recipeEditing || recipeBusy || stage.classList.contains("recipe-focus"))) return;
     const elapsed = Date.now() - state.lastInput,
       returnMs = state.settings.returnTodayMinutes * 60000;
     if (state.view !== "today" && elapsed >= returnMs) {
@@ -1384,7 +1413,8 @@
         !state.shoppingBusy.size &&
         !state.homeBusy &&
         !state.settingsBusy &&
-        !document.activeElement.matches("input, select") &&
+        !(state.view === "recipes" && (recipeEditing || recipeBusy)) &&
+        !document.activeElement.matches("input, select, textarea") &&
         (poll || state.view === "today")
       ) {
         const scroll = captureScroll();
@@ -1409,7 +1439,6 @@
     calendar,
     shopping,
     weather,
-    quotes,
     photos,
     home,
     settings,
@@ -1419,8 +1448,16 @@
     const [kind, arg, delta] = value.split(":");
     if (kind === "recipebrowse") return browseRecipes();
     if (kind === "recipevisit") return browseRecipes(activeRecipe.url);
-    if (kind === "recipeback") {activeRecipe=null;recipeFocus=false;recipeDone.clear();return navigate("recipes");}
-    if (kind === "recipeopen") {activeRecipe=recipeList[Number(arg)];recipeDone.clear();return drawRecipe();}
+    if (kind === "recipeback") {activeRecipe=null;recipeEditing=false;recipeFocus=false;recipeDone.clear();return navigate("recipes");}
+    if (kind === "recipeopen") return openRecipe(arg);
+    if (kind === "recipetab") {recipeTab=arg;recipeQuery='';return drawRecipe();}
+    if (kind === "recipetracker") {location.assign('/recipe_tracker/');return;}
+    if (kind === "recipenew") {activeRecipe=null;recipeEditing=true;return drawRecipe();}
+    if (kind === "recipeedit") {recipeEditing=true;return drawRecipe();}
+    if (kind === "recipecancel") {recipeEditing=false;return drawRecipe();}
+    if (kind === "recipesave") return recipeWrite('PATCH',{revision:activeRecipe.revision,saved:true});
+    if (kind === "recipedelete") return modal('Delete recipe?',`<p>Delete ${esc(activeRecipe.title)} from this server? This cannot be undone.</p>${button('Delete recipe','recipeconfirmdelete','btn danger')}`);
+    if (kind === "recipeconfirmdelete") return recipeWrite('DELETE',{revision:activeRecipe.revision});
     if (kind === "recipefocus") {recipeFocus=!recipeFocus;return drawRecipe();}
     if (kind === "recipefont") {recipeLarge=!recipeLarge;return drawRecipe();}
     if (kind === "recipecheck") {recipeDone.has(arg) ? recipeDone.delete(arg) : recipeDone.add(arg);return drawRecipe();}
@@ -1546,26 +1583,6 @@
     }
     if (kind === "clearshopping")
       return shoppingWrite("/api/shopping/clear", "POST", {});
-    if (kind === "nextquote") {
-      state.quoteIndex =
-        (state.quoteIndex + 1) % state.quotes.data.quotes.length;
-      return drawQuote();
-    }
-    if (kind === "savequote") {
-      const text = state.quotes.data.quotes[state.quoteIndex].text;
-      state.favorites = state.favorites.includes(text)
-        ? state.favorites.filter((t) => t !== text)
-        : [...state.favorites, text];
-      try {
-        localStorage.setItem(
-          "hub.quoteFavorites",
-          JSON.stringify(state.favorites),
-        );
-      } catch {
-        toast("Saved for this session only");
-      }
-      return drawQuote();
-    }
     if (kind === "collection") {
       state.collection = state.photos.data.collections[Number(arg)];
       return drawPhotos();
@@ -1633,6 +1650,11 @@
     else if (e.target.classList.contains("modal-back")) closeModal();
   });
   document.addEventListener("submit", (e) => {
+    if (e.target.id === "recipe-edit-form") {
+      e.preventDefault();const values=Object.fromEntries(new FormData(e.target));
+      values.ingredients=values.ingredients.split('\n');values.steps=values.steps.split('\n');values.tags=values.tags.split(',').map(x=>x.trim()).filter(Boolean);
+      recipeWrite(activeRecipe ? 'PATCH' : 'POST',activeRecipe ? {recipe:values,revision:activeRecipe.revision} : {recipe:values});return;
+    }
     if (e.target.id === "recipe-search-form") {e.preventDefault();browseRecipes(new FormData(e.target).get("query"));return;}
     if (e.target.id === "recipe-form") {e.preventDefault();importRecipe(new FormData(e.target).get("url"));return;}
     if (e.target.id !== "add-form") return;
@@ -1759,10 +1781,14 @@
   async function start() {
     await loadSettings();
     const recipeURL=new URLSearchParams(location.search).get("recipe");
-    await navigate(recipeURL ? "recipes" : "today");
+    const recipeId=new URLSearchParams(location.search).get("recipeId");
+    await navigate(recipeURL || recipeId ? "recipes" : "today");
+    if(recipeId && /^[a-f0-9]{12}$/.test(recipeId)) {await openRecipe(recipeId);if(activeRecipe){recipeFocus=true;drawRecipe();}}
     if(recipeURL) {await importRecipe(recipeURL);if(activeRecipe){recipeFocus=true;drawRecipe();}}
     refreshCommon();
     setInterval(() => refreshCommon(true), 60000);
+    readPhotos().catch(()=>{});
+    setInterval(()=>readPhotos().catch(()=>{}),60000);
     // After a cold start without the server (e.g. the frame booted first), retry
     // sooner than the regular poll until settings and Today data have arrived.
     setInterval(() => {

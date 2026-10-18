@@ -33,7 +33,9 @@ from camera_stream import LiveCamera
 from govee import from_config as govee_from_config
 from integrations import CameraInactive, SourceUnavailable, from_config, private_json
 from photos import PhotoLibrary
+import recipe_tracker
 from recipes import read_recipe
+from recipe_catalog import RecipeCatalog, CatalogError, MAX_LEGACY_RECIPE
 from weather import Weather, empty_weather
 from shopping import ShoppingBridge
 
@@ -204,6 +206,7 @@ def photo_svg(index):
 class Hub:
     def __init__(self, store, integrations=None, photos=None, weather=None, shopping=None, govee=None):
         self.store = store
+        self.recipes = RecipeCatalog(store)
         self.integrations = integrations
         self.live_camera = LiveCamera(integrations) if integrations is not None else None
         self.photos = photos
@@ -441,13 +444,15 @@ def make_handler(hub, allowed, token=None):
             self.end_headers()
             self.wfile.write(raw)
 
-        def body(self):
+        def body(self, limit=None):
             # A JSON content type forces a CORS preflight, which this server never
             # answers, so other web pages on an allowed machine cannot write here.
             if self.headers.get('Content-Type', '').split(';')[0].strip() != 'application/json':
                 raise ValueError('content type')
             length = int(self.headers.get('Content-Length', '0'))
-            if not 0 < length <= MAX_BODY:
+            if limit is None:
+                limit = 32768 if self.path.startswith('/api/recipes') else MAX_BODY
+            if not 0 < length <= limit:
                 raise ValueError('body size')
             try:
                 value = json.loads(self.rfile.read(length))
@@ -489,14 +494,27 @@ def make_handler(hub, allowed, token=None):
                         start = start.astimezone()
                     days = max(1, min(42, int(params.get('days', '3'))))
                     self.reply(hub.calendar(start, start + timedelta(days=days)))
+                elif path.startswith(recipe_tracker.PREFIX):
+                    try:
+                        raw, kind = recipe_tracker.response(path)
+                    except FileNotFoundError:
+                        return self.reply({'error': 'Recipe Tracker file unavailable'}, 404)
+                    except (OSError, ValueError):
+                        return self.reply({'error': 'Recipe Tracker is not installed or its build is unavailable'}, 503)
+                    self.send_response(200)
+                    self.send_header('Content-Type', kind)
+                    self.send_header('Content-Security-Policy', recipe_tracker.CSP)
+                    self.send_header('Content-Length', str(len(raw)))
+                    self.end_headers()
+                    self.wfile.write(raw)
                 elif path == '/api/recipes':
-                    self.reply({'recipes': hub.store.read('recipes', [])})
+                    self.reply(hub.recipes.listing())
+                elif match := re.fullmatch(r'/api/recipes/([a-f0-9]{12})', path):
+                    self.reply(hub.recipes.get(match[1]))
                 elif path == '/api/shopping':
                     self.reply(hub.shopping())
                 elif path == '/api/weather':
                     self.reply(hub.weather())
-                elif path == '/api/quotes':
-                    self.reply({'quotes': QUOTES, 'todayIndex': now().toordinal() % len(QUOTES)})
                 elif path == '/api/photos/manifest':
                     if hub.photos is not None and hub.photos.enabled:
                         self.reply(hub.photos.manifest())
@@ -551,6 +569,8 @@ def make_handler(hub, allowed, token=None):
                     self.reply({'error': 'not found'}, 404)
                 else:
                     super().do_GET()
+            except CatalogError as error:
+                self.reply({'error': str(error)}, error.status)
             except SourceUnavailable as error:
                 self.reply({'error': str(error)}, 410 if isinstance(error, CameraInactive) else 503)
             except (KeyError, ValueError):
@@ -563,14 +583,11 @@ def make_handler(hub, allowed, token=None):
                 body = self.body()
                 if self.path == '/api/recipes':
                     try:
-                        recipe = read_recipe(body.get('url'))
+                        recipe = body['recipe'] if 'recipe' in body else read_recipe(body.get('url'))
+                        with LOCK:
+                            recipe = hub.recipes.create(recipe, saved='recipe' in body)
                     except ValueError as error:
-                        return self.reply({'error': str(error)}, 400)
-                    recipe['id'] = uuid.uuid4().hex[:12]
-                    with LOCK:
-                        saved = hub.store.read('recipes', [])
-                        saved = [recipe] + [r for r in saved if r.get('url') != recipe['url']]
-                        hub.store.write('recipes', saved[:5])
+                        return self.reply({'error': str(error)}, getattr(error, 'status', 400))
                     self.reply(recipe)
                 elif self.path == '/api/shopping':
                     name, qty, category, notes = clean_item(body)
@@ -612,15 +629,36 @@ def make_handler(hub, allowed, token=None):
                     self.reply(current)
                 else:
                     self.reply({'error': 'not found'}, 404)
+            except CatalogError as error:
+                self.reply({'error': str(error)}, error.status)
             except SourceUnavailable as error:
                 self.reply({'error': str(error)}, 503)
             except (KeyError, ValueError, json.JSONDecodeError):
                 self.reply({'error': 'bad request'}, 400)
 
+        def recipe_mutation(self, delete=False):
+            try:
+                match = re.fullmatch(r'/api/recipes/([a-f0-9]{12})', self.path)
+                if not match:
+                    return self.reply({'error': 'not found'}, 404)
+                legacy = not delete and hub.recipes.get(match[1]).get('legacy', False)
+                body = self.body(MAX_LEGACY_RECIPE + 4096 if legacy else 32768)
+                with LOCK:
+                    result = hub.recipes.change(match[1], body, delete)
+                self.reply(result)
+            except CatalogError as error:
+                self.reply({'error': str(error)}, error.status)
+            except SourceUnavailable as error:
+                self.reply({'error': str(error)}, 503)
+            except ValueError:
+                self.reply({'error': 'Invalid recipe request'}, 400)
+
         def do_PATCH(self):
             if not self.allowed():
                 return
             try:
+                if self.path.startswith('/api/recipes/'):
+                    return self.recipe_mutation(False)
                 match = re.fullmatch(r'/api/shopping/([a-f0-9]{12})', self.path)
                 if not match:
                     return self.reply({'error': 'not found'}, 404)
@@ -638,6 +676,8 @@ def make_handler(hub, allowed, token=None):
         def do_DELETE(self):
             if not self.allowed():
                 return
+            if self.path.startswith('/api/recipes/'):
+                return self.recipe_mutation(True)
             match = re.fullmatch(r'/api/shopping/([a-f0-9]{12})', self.path)
             if not match:
                 return self.reply({'error': 'not found'}, 404)

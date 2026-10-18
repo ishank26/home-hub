@@ -148,7 +148,7 @@ without waiting for the entire large selection.
 
 This supersedes the larger-window and incremental-gallery policies above. Every
 hour, the worker scans eligible photo metadata using reservoir sampling, downloads
-up to ten selected stills and publishes that complete sample. All pages are scanned
+up to 300 selected stills and publishes that complete sample. All pages are scanned
 (up to 100 pages / 10,000 distinct eligible photos); exceeding the scan budget fails
 without claiming a full-library sample. Hidden/unselected photos and non-Live
 videos are excluded. Originals remain in Aura. Only normalized display copies and
@@ -156,7 +156,19 @@ thumbnails are downloaded, not a full gallery.
 
 After publication, old generated JPEGs are removed immediately. During a refresh,
 old and new samples may briefly coexist so a failed download retains a usable
-sample. The `trim` command migrates an existing large cache to ten published photos
+sample. The `trim` command migrates an existing large cache to 300 published photos
 under the same sync lock. Stale browser URLs for retired photos return not found.
-A service failure retains the last ten and reports stale state; it does not grow
+A service failure retains the last successful sample and reports stale state; it does not grow
 an archive. The hourly timer requires the owner-local saved Aura session.
+
+
+Owner changed the target to300 photos on2026-10-18. The worker allows300 new
+normalized photos per run and a600-second batch budget inside its12-minute unit
+limit.512MiB total server cache and free-space admission still apply. The tablet
+also keeps the latest complete sample (up to300 photos plus thumbnails,256MiB cap)
+in private WebView IndexedDB, replacing rather than accumulating hourly batches.
+A failed device download/quota check retains its preceding complete sample.
+Actual device count/bytes must be checked after initial population; the configured
+capacity is not proof that300 real photos have been downloaded. Browser Aura login
+does not create the separate worker session; owner-local aura-setup is still needed
+when its authorization file is absent.

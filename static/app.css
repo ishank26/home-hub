@@ -168,11 +168,6 @@ select:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); 
 .day7 .t span { font-weight: 400; color: var(--ink-3); }
 
 /* Quotes */
-.quote-card { flex: 1; min-height: 0; border-radius: 28px; background: #F3EEE4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; padding: 48px 96px; text-align: center; }
-.quote-card blockquote { margin: 0; font-family: var(--serif); font-style: italic; font-size: 60px; line-height: 1.2; color: #2A2520; }
-.quote-card .a { font-size: 26px; font-weight: 700; }
-.quote-card .s { font-size: 19px; color: #5A4E3E; }
-.center-row { display: flex; justify-content: center; gap: 16px; }
 
 /* Photos */
 .photo-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 172px; gap: 14px; overflow-y: auto; }
@@ -311,3 +306,14 @@ svg { vertical-align: middle; flex: none; }
   #stage.recipe-focus .recipe-reader h1 { font-size:30px; }
   #stage.recipe-focus .recipe-tools .btn { min-height:48px; font-size:16px; padding:0 10px; }
 }
+
+.recipe-library { max-width:1000px; margin:16px auto; }
+.recipe-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; margin:20px 0; }
+.recipe-card { display:flex; flex-direction:column; gap:12px; text-align:left; padding:24px; min-height:110px; border:1px solid var(--line); border-radius:14px; background:var(--panel); font:inherit; }
+.recipe-card b { font-size:23px; }
+.recipe-filter, .recipe-editor input, .recipe-editor textarea { width:100%; box-sizing:border-box; padding:14px; margin:8px 0 16px; font:inherit; font-size:21px; border:1px solid var(--line); border-radius:10px; background:var(--panel); color:var(--ink); user-select:text; }
+.recipe-editor { max-width:850px; padding:24px; margin:auto; }
+.recipe-editor label { display:block; }
+.recipe-editor textarea { resize:vertical; line-height:1.5; }
+.recipe-notes { white-space:pre-wrap; }
+.recipe-reader .meta { overflow-wrap:anywhere; }

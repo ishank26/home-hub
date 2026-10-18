@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""Install only verified public demo assets into private runtime storage."""
+import hashlib
+import os
+from pathlib import Path
+import shutil
+import sys
+import tempfile
+from urllib.request import urlopen
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+from recipe_tracker import ASSETS, BASE, DIRECTORY
+
+
+def main():
+    DIRECTORY.parent.mkdir(mode=0o700,parents=True,exist_ok=True)
+    staging=Path(tempfile.mkdtemp(prefix='.recipe-tracker-',dir=DIRECTORY.parent))
+    try:
+        for name,(digest,_) in ASSETS.items():
+            with urlopen(BASE+name,timeout=20) as response:
+                raw=response.read(1024*1024+1)
+            if len(raw)>1024*1024 or hashlib.sha256(raw).hexdigest()!=digest:
+                raise ValueError('Published build differs from reviewed version; installation stopped')
+            path=staging/name
+            path.parent.mkdir(mode=0o700,parents=True,exist_ok=True)
+            path.write_bytes(raw);path.chmod(0o600)
+        if DIRECTORY.exists():
+            # A matching existing release needs no change. Never delete an unknown directory.
+            from recipe_tracker import read_asset
+            for name in ASSETS:read_asset(name,DIRECTORY)
+            print('Verified Recipe Tracker is already installed')
+            return
+        os.rename(staging,DIRECTORY)
+        print('Verified Recipe Tracker installed in private runtime storage')
+    finally:
+        if staging.exists():shutil.rmtree(staging)
+
+
+if __name__=='__main__':main()

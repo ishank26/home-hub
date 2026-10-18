@@ -65,10 +65,10 @@ class ClientTests(unittest.TestCase):
         with patch.object(client, '_api', side_effect=pages) as api, patch('aura_sync.random.SystemRandom') as rng:
             rng.return_value.randrange.return_value = 0
             result = client.assets('synthetic-frame')
-        self.assertEqual(len(result), 10)
+        self.assertEqual(len(result), 300)
         self.assertEqual(api.call_count, 11)
         self.assertEqual(result[0]['id'], 'a1099')
-        self.assertEqual(len({a['id'] for a in result}), 10)
+        self.assertEqual(len({a['id'] for a in result}), 300)
         self.assertEqual(rng.return_value.randrange.call_args.args[0], 1100)
         self.assertFalse(client.window_limited)
         with patch.object(client, '_api', return_value={'assets': [{'id': 'only'}]}):
@@ -211,7 +211,8 @@ class ImageSyncTests(unittest.TestCase):
             assets = [{'id': 'old' + str(i)} for i in range(15)]
             with patch.object(client, 'assets', return_value=assets), patch.object(client, 'image', return_value=self.image()), patch('aura_sync.MAX_NEW_PHOTOS', 15):
                 synchronize(client, 'frame-1', root)
-            self.assertEqual(trim_sample(root), 10)
+            with patch('aura_sync.SAMPLE_SIZE',10):
+                self.assertEqual(trim_sample(root), 10)
             self.assertEqual(len(list((root/'cache').glob('*.jpg'))), 20)
             with patch.object(client, 'assets', return_value=[{'id':'fresh'}]), patch.object(client, 'image', return_value=self.image()):
                 synchronize(client, 'frame-1', root)

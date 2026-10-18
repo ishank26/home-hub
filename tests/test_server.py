@@ -85,9 +85,70 @@ class ServerTests(unittest.TestCase):
         status,_,_=self.request('/api/recipes','POST',{'url':'http://127.0.0.1'})
         self.assertEqual(status,400)
 
+    def test_recipe_http_crud_revision_and_offline_reader(self):
+        value={'title':'Test soup','ingredients':['water'],'steps':['Simmer'], 'tags':['Soup']}
+        row=self.api('/api/recipes','POST',{'recipe':value})
+        path='/api/recipes/'+row['id']
+        self.assertTrue(row['saved'])
+        changed=self.api(path,'PATCH',{'revision':1,'recipe':dict(value,title='Edited soup')})
+        self.assertEqual(changed['revision'],2)
+        self.assertEqual(self.request(path,'PATCH',{'revision':1,'saved':True})[0],409)
+        self.assertEqual(self.request(path,'DELETE',{'revision':1})[0],409)
+        self.assertEqual(self.api(path)['title'],'Edited soup')
+        self.assertNotIn('ingredients',self.api('/api/recipes')['recipes'][0])
+        self.api(path,'DELETE',{'revision':2})
+        self.assertEqual(self.request(path)[0],404)
+        self.assertEqual(self.request(path,'DELETE',{'revision':2})[0],404)
+        # Auth boundary covers new routes just as it covers shopping.
+        with patch.object(self.handler,'allowed',return_value=False):
+            with patch.object(self.hub.recipes,'change') as change:
+                # Exercise handler directly: allowed() returning False sends no response.
+                handler=object.__new__(self.handler)
+                handler.do_PATCH()
+                handler.do_DELETE()
+                change.assert_not_called()
+
+    def test_legacy_recipe_http_edit_above_new_body_limit(self):
+        legacy={'id':'012345abcdef','title':'Legacy','ingredients':['Water'], 'steps':['x'*2000]*20, 'yield':'x'*100}
+        self.hub.store.write('recipes',[legacy])
+        row=self.api('/api/recipes/'+legacy['id'])
+        row['title']='Legacy edited'
+        edited=self.api('/api/recipes/'+legacy['id'],'PATCH',{'revision':1,'recipe':row})
+        self.assertEqual(edited['title'],'Legacy edited')
+        self.assertEqual(edited['steps'],legacy['steps'])
+        self.assertEqual(self.request('/api/recipes','POST',{'recipe':legacy})[0],400)
+
+    def test_recipe_concurrent_edits_only_one_wins(self):
+        from concurrent.futures import ThreadPoolExecutor
+        row=self.api('/api/recipes','POST',{'recipe':{'title':'Soup','ingredients':['Water'],'steps':['Simmer']}})
+        path='/api/recipes/'+row['id']
+        def update(title):
+            return self.request(path,'PATCH',{'revision':1,'recipe':{'title':title,'ingredients':['Water'],'steps':['Simmer']}})[0]
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            statuses=list(pool.map(update,['First','Second']))
+        self.assertEqual(sorted(statuses),[200,409])
+        self.assertEqual(self.api(path)['revision'],2)
+
+    def test_homepage_quote_rotates_daily(self):
+        day=server.now()
+        with patch.object(server,'now',return_value=day):
+            first=self.api('/api/today')['quote']
+        with patch.object(server,'now',return_value=day+timedelta(days=1)):
+            second=self.api('/api/today')['quote']
+        self.assertEqual(first,server.QUOTES[day.toordinal()%len(server.QUOTES)])
+        self.assertNotEqual(first,second)
+
+    def test_local_tracker_route_has_admission_and_restrictive_csp(self):
+        with patch.object(server.recipe_tracker,'response',return_value=(b'<h1>Recipe Tracker</h1>','text/html')) as app:
+            status,headers,raw=self.request('/recipe_tracker/')
+            self.assertEqual(status,200)
+            self.assertIn("connect-src 'none'",headers['Content-Security-Policy'])
+            self.assertEqual(raw,b'<h1>Recipe Tracker</h1>')
+        self.assertEqual(self.request('/recipe_tracker/../../config.json')[0],404)
+
     def test_get_endpoints_and_static(self):
         paths = ['/api/today', '/api/calendar?from=' + server.iso(server.now()),
-                 '/api/shopping', '/api/weather', '/api/quotes', '/api/photos/manifest',
+                 '/api/shopping', '/api/weather', '/api/photos/manifest',
                  '/api/home', '/api/settings', '/api/status']
         for path in paths:
             with self.subTest(path=path):
@@ -100,6 +161,7 @@ class ServerTests(unittest.TestCase):
         for path in ['/', '/app.css', '/app.js', '/photos/p00.svg']:
             self.assertEqual(self.request(path)[0], 200)
         self.assertEqual(self.request('/api/missing')[0], 404)
+        self.assertEqual(self.request('/api/quotes')[0], 404)
 
     def test_shopping_lifecycle_and_persistence(self):
         result = self.api('/api/shopping', 'POST', {'name': '  Test apples  ', 'qty': '2', 'notes': 'ripe', 'category': 'Unknown'})

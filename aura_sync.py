@@ -36,8 +36,8 @@ DEFAULT_DATA = Path.home() / '.local/share/home-hub/data'
 MAX_IMAGE_BYTES = 32 * 1024 * 1024
 MAX_CACHE_BYTES = 512 * 1024 * 1024
 MAX_CACHE_FILES = 4000
-MAX_NEW_PHOTOS = 10
-SAMPLE_SIZE = 10
+MAX_NEW_PHOTOS = 300
+SAMPLE_SIZE = 300
 MAX_CATALOG = 10000
 MIN_FREE_BYTES = 128 * 1024 * 1024
 
@@ -331,7 +331,7 @@ def synchronize(client, frame_id, directory):
                 pid = hashlib.sha256((frame_id + ':' + revision).encode()).hexdigest()[:32]
                 display, thumb = cache / (pid + '.jpg'), cache / (pid + '.thumb.jpg')
                 if not display.is_file() or not thumb.is_file() or display.is_symlink() or thumb.is_symlink():
-                    if downloaded >= MAX_NEW_PHOTOS or time.monotonic() - started > 300:
+                    if downloaded >= MAX_NEW_PHOTOS or time.monotonic() - started > 600:
                         pending = True
                         continue
                     if (file_count + 2 > MAX_CACHE_FILES or byte_count + 8_000_000 > MAX_CACHE_BYTES
@@ -380,7 +380,7 @@ def setup(config_dir=CONFIG, data=DEFAULT_DATA):
     config_dir = Path(config_dir)
     config_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     print('Sign in to your existing Aura account. Password input is hidden and is not saved.')
-    print('This mirror keeps a random sample of up to 10 photos, replaced hourly; old local copies are removed.')
+    print('This mirror keeps a random sample of up to 300 photos, replaced hourly; old local copies are removed.')
     email = input('Aura account email: ').strip()
     password = getpass.getpass('Aura password: ')
     client = AuraClient()
@@ -407,7 +407,7 @@ def setup(config_dir=CONFIG, data=DEFAULT_DATA):
     config['photos'] = {'source': 'aura'}
     atomic_json(path, config)
     print(f'Aura connected. Published {count} photos. The Aura password was not saved.')
-    print('Only the current ten-photo sample is retained locally.')
+    print('Only the current 300-photo sample is retained locally.')
 
 
 def main():

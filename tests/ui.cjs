@@ -59,7 +59,7 @@ const { chromium } = require("playwright");
     await page.goto(base);
     await page.locator(".clock-big").waitFor();
     await page.evaluate(() => document.fonts.ready);
-    assert.equal(await page.locator(".rail-item").count(), 9);
+    assert.equal(await page.locator(".rail-item").count(), 8);
     assert.equal(
       await page
         .locator("#rail")
@@ -79,7 +79,6 @@ const { chromium } = require("playwright");
             calendar: "Calendar",
             shopping: "Shopping",
             weather: "Weather",
-            quotes: "Quotes",
             photos: "Photos",
             home: "Smart Home",
             settings: "Settings",
@@ -145,7 +144,7 @@ const { chromium } = require("playwright");
     await page.locator(".cal-grid").evaluate((el) => {
       el.scrollTop = 400;
     });
-    await nav("quotes");
+    await nav("photos");
     await nav("calendar");
     assert.equal(
       await page.locator(".cal-grid").evaluate((el) => el.scrollTop),
@@ -251,11 +250,11 @@ const { chromium } = require("playwright");
     assert.equal(await page.locator(".hour").count(), 12);
     await fits();
     await page.route("**/api/weather", (route) => route.abort());
-    await nav("quotes");
+    await nav("photos");
     await nav("weather");
     await page.getByText(/Stale · last loaded/).waitFor();
     await page.unroute("**/api/weather");
-    await nav("quotes");
+    await nav("photos");
     await page.route("**/api/weather", () => {});
     const pendingWeather = page.waitForRequest("**/api/weather");
     await page.locator('.rail-item[data-action="nav:weather"]').click();
@@ -263,15 +262,10 @@ const { chromium } = require("playwright");
     await page.clock.runFor(8100);
     await page.getByText(/Stale · last loaded/).waitFor();
     await page.unroute("**/api/weather");
-    await nav("quotes");
-    await page.locator('[data-action="savequote"]').click();
-    assert.equal(
-      await page
-        .locator('[data-action="savequote"]')
-        .getAttribute("aria-pressed"),
-      "true",
-    );
-    await page.locator('[data-action="nextquote"]').click();
+    await nav("photos");
+    await nav("today");
+    assert.equal(await page.locator('.quote-line q').count(),1);
+    assert.equal(await page.locator('[data-action="nav:quotes"]').count(),0);
     await fits();
     await nav("photos");
     assert.equal(await page.locator(".photo-grid button").count(), 16);
@@ -345,7 +339,7 @@ const { chromium } = require("playwright");
     await page.locator('[role="dialog"]').waitFor();
     await page.keyboard.press("Escape");
     // Fixed idle chain: other view -> Today after 2 min -> saver after delay.
-    await nav("quotes");
+    await nav("photos");
     await page.clock.runFor(121000);
     await page.locator(".clock-big").waitFor();
     await page.clock.runFor(181000);
@@ -371,7 +365,7 @@ const { chromium } = require("playwright");
     assert.deepEqual(errors, []);
     assert.deepEqual(external, []);
     console.log(
-      "UI tests passed: nine navigation entries, mutations, injection, stale fallback, modals, saver, idle, night, admin hold, scaling.",
+      "UI tests passed: eight navigation entries, mutations, injection, stale fallback, modals, saver, idle, night, admin hold, scaling.",
     );
   } finally {
     if (browser) await browser.close();

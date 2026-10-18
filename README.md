@@ -47,7 +47,7 @@ Three local OFL font faces are in `static/fonts/`, with licenses and provenance.
 - Categorized shopping, quantity/notes, quick add, confirmed check state, per-row
   Saving/Retry, collapsed completed items, clear and five-second delete Undo.
 - Observed/forecast labels, horizontally scrollable 12-hour forecast and seven days.
-- Verified quote collection, Next and local favorites (storage denial is handled).
+- A daily quote appears automatically on Today; there is no separate Quotes page.
 - Photo filters, fullscreen viewer and two-layer crossfade slideshow.
 - Sample home contacts/scenes/lights, pending doorbell, honest camera placeholders;
   command confirmation and five-second Undo. Stale home controls are disabled.
@@ -201,22 +201,52 @@ file. This is an independent dashboard connector, not an installed HA custom
 integration. Browser QA: `NODE_PATH=/tmp/home-hub-browser/node_modules node tests/ui-govee.cjs`.
 
 
-Hourly photo sampling keeps only ten Aura photos plus thumbnails. Old local JPEG
+Hourly photo sampling keeps up to 300 Aura photos plus thumbnails. Old local JPEG
 copies are removed after a successful sample replacement. Activate with the
-installed hourly Aura timer after owner-local `scripts/aura-setup`. See the current
+installed hourly Aura timer after owner-local `scripts/aura-setup`.
+The tablet also stores the current 300 normalized photos and thumbnails in its
+private WebView IndexedDB (256 MB cap). A complete new sample replaces the previous
+one atomically; failed downloads keep the previous sample. Photos can reopen from
+that stored copy after app reload when the photo server is unreachable. Disabling
+the photo source or publishing an empty sample clears the device copy and cancels
+older downloads. Clearing kiosk app data also removes device-stored photos. The
+server remains the bridge for obtaining new hourly samples; app shell availability
+while the whole dashboard server is offline is not guaranteed. See the current
 [photo storage policy](docs/aura-protocol.md#current-storage-policy--hourly-random-sample-2026-10-18).
 
-Recipes: open **Recipes**, paste a public HTTPS recipe URL, then choose **Focus
+Recipes: open **Recipes → Find on web**, paste a public HTTPS recipe URL, then choose **Focus
 mode**. Ingredients and numbered steps can be checked off; larger text and source
 sharing are available. **Reader link** opens directly in the clean reader on a
 browser already authorized for this private dashboard. Publisher pages must
 provide Schema.org Recipe JSON-LD; blocked/login-only pages are not bypassed.
-Only the five most recent extracted text recipes are stored, with no downloaded
-publisher images or page archives. Browser QA: `node tests/ui-recipes.cjs`.
+Save imported previews or create recipes by hand in the Recipes catalog. Saved
+recipes persist on the server (up to 200) and are never evicted by new imports;
+only the five unsaved previews rotate. Existing recent recipes are treated as
+saved on migration. Search titles/tags, edit ingredients/steps/notes and delete
+recipes with confirmation. Reader links use a stable recipe ID and reopen the
+stored text without contacting the publisher. The dashboard server must remain
+reachable; this does not provide offline access when the server is unavailable.
+
+Recipe data lives in the private runtime data directory, outside Git. Writes are
+atomic; stale edits/deletes receive a conflict instead of overwriting another
+window. Corrupt data is preserved and blocks changes rather than resetting the
+catalog. New recipes are bounded to 24 KB each; the catalog limit is 20 MB
+to accommodate larger recipes retained from the previous reader. Lists send
+metadata only; full text is fetched when a recipe opens. No publisher images or
+page archives are downloaded.
+
+**Open Recipe Tracker** launches a local copy of the owner's published demo build.
+Install it with `python3 scripts/install-recipe-tracker`: three hash-pinned public
+assets (about 544 KB total) are verified and stored outside Git. The local route
+uses the existing dashboard admission rules and blocks provider/network calls;
+no new browser engine or service port is installed. Its browser-local recipe
+library is separate from the dashboard's server catalog. **Back to dashboard**
+returns to Home Hub. No private project source, credentials or remote database is
+bundled in this repository. Browser QA: `node tests/ui-recipes.cjs`.
 
 
 The tablet kiosk v0.5 includes a lightweight single-tab WebView browser. In
-**Recipes**, enter search words or a website and choose **Search / Browse**. Open
+**Recipes → Find on web**, enter search words or a website and choose **Search / Browse**. Open
 an actual recipe page, then use the native **Read recipe** button to return to
 focus reading automatically. **Dashboard** returns without importing. The browser
 has an address bar, Back/Forward and Reload, and uses the existing system WebView
