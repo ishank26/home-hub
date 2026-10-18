@@ -833,7 +833,7 @@
     frame(
       "Photos",
       r,
-      `<div class="quick">${r.data.collections.map((c, i) => button(esc(c), `collection:${i}`, "chip", `aria-pressed="${state.collection === c}"`)).join("")}<span class="meta">${list.length} photos${r.data.windowLimited ? " · bounded selection" : ""} · ${r.data.syncedAt ? "Synced " + esc(time(r.data.syncedAt)) : "Not synced yet"}</span></div><div class="photo-grid">${list.map((p, i) => button(`<img src="${photoURL(p, true)}" alt="Photo ${i + 1}" loading="lazy" decoding="async">`, `photo:${i}`, "")).join("") || '<div class="empty">No photos in this collection</div>'}</div>`,
+      `<div class="quick">${r.data.collections.map((c, i) => button(esc(c), `collection:${i}`, "chip", `aria-pressed="${state.collection === c}"`)).join("")}<span class="meta">${list.length} photos${r.data.syncPending ? " · syncing more photos" : ""}${r.data.windowLimited ? " · bounded selection" : ""} · ${r.data.syncedAt ? "Synced " + esc(time(r.data.syncedAt)) : "Not synced yet"}</span></div><div class="photo-grid">${list.map((p, i) => button(`<img src="${photoURL(p, true)}" alt="Photo ${i + 1}" loading="lazy" decoding="async">`, `photo:${i}`, "")).join("") || '<div class="empty">No photos in this collection</div>'}</div>`,
       button(
         "Start slideshow",
         "slideshow",
@@ -1209,6 +1209,7 @@
             : r.data.source === "sample"
               ? "Sample photos"
               : r.data.source === "unconfigured" ? "Aura photos need setup"
+                : r.data.syncPending ? "Aura photos · syncing more photos"
                 : r.data.windowLimited ? "Aura photos · 1,000-photo selection" : "Aura photos";
           if (!saverPhotos.length) {
             overlay.querySelectorAll(".saver img").forEach((img) => {

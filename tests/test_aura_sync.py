@@ -188,6 +188,19 @@ class ImageSyncTests(unittest.TestCase):
                 synchronize(client, 'frame-1', root)
             self.assertEqual(PhotoLibrary(root).manifest()['photos'], [])
 
+    def test_large_first_sync_publishes_batch_then_reuses_cache_to_complete(self):
+        client = AuraClient()
+        assets = [{'id': 'a' + str(i)} for i in range(3)]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(client, 'assets', return_value=assets), patch.object(client, 'image', return_value=self.image()) as download, patch('aura_sync.MAX_NEW_PHOTOS', 2):
+                self.assertEqual(synchronize(client, 'frame-1', root), 2)
+                self.assertTrue(PhotoLibrary(root).manifest()['syncPending'])
+                self.assertEqual(synchronize(client, 'frame-1', root), 3)
+                self.assertFalse(PhotoLibrary(root).manifest()['syncPending'])
+                self.assertEqual(download.call_count, 3)
+            self.assertEqual(len(PhotoLibrary(root).manifest()['photos']), 3)
+
     def test_corrupt_image_preserves_old_manifest(self):
         client = AuraClient()
         with tempfile.TemporaryDirectory() as directory:

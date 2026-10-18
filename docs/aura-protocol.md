@@ -133,4 +133,12 @@ selection boundary; disk, file, download and sync-time limits remain unchanged.
 
 Browser sign-in does not authorize the separate mirror worker. The owner must run
 `scripts/aura-setup` locally for its hidden password prompt and explicit frame
-selection. The timer is enabled only after a complete first publication succeeds.
+selection. The timer is enabled only after a successful first batch publication.
+
+Each sync downloads at most 100 new photos, then atomically publishes the verified
+available subset with a “syncing more photos” label while work remains. Subsequent
+syncs reuse these normalized copies and fill the selection in further batches.
+New downloads stop after a 300-second budget (an in-flight request can finish);
+no empty partial result replaces an existing library. A failed download still
+retains the preceding publication. Initial setup now displays useful photos
+without waiting for the entire large selection.

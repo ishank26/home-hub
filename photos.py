@@ -37,7 +37,8 @@ class PhotoLibrary:
             except (OSError, ValueError):
                 stale = True
             return {'source': 'aura', 'state': 'stale' if stale else 'current',
-                    'syncedAt': stamp.isoformat(), 'windowLimited': value.get('windowLimited') is True, 'collections': ['All', 'Aura'],
+                    'syncedAt': stamp.isoformat(), 'windowLimited': value.get('windowLimited') is True,
+                    'syncPending': value.get('syncPending') is True, 'collections': ['All', 'Aura'],
                     'photos': [{'id': p['id'], 'collections': ['All', 'Aura']} for p in photos]}
         except FileNotFoundError:
             return {'source': 'unconfigured', 'state': 'failed', 'syncedAt': None,

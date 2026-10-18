@@ -35,6 +35,7 @@ DEFAULT_DATA = Path.home() / '.local/share/home-hub/data'
 MAX_IMAGE_BYTES = 32 * 1024 * 1024
 MAX_CACHE_BYTES = 512 * 1024 * 1024
 MAX_CACHE_FILES = 4000
+MAX_NEW_PHOTOS = 100  # Publish a useful first batch, then fill the window on later syncs.
 MIN_FREE_BYTES = 128 * 1024 * 1024
 
 
@@ -280,14 +281,15 @@ def synchronize(client, frame_id, directory):
             file_count, byte_count = cache_usage(cache, protected)
             started = time.monotonic()
             assets = client.assets(frame_id)
-            photos = []
+            photos, downloaded, pending = [], 0, False
             for asset in assets:
-                if time.monotonic() - started > 600:
-                    raise AuraError('Aura sync exceeded its time budget; cached photos retained')
                 revision = '|'.join(str(asset.get(k, '')) for k in ('id', 'file_name', 'md5_hash', 'modified_at', 'rotation_cw'))
                 pid = hashlib.sha256((frame_id + ':' + revision).encode()).hexdigest()[:32]
                 display, thumb = cache / (pid + '.jpg'), cache / (pid + '.thumb.jpg')
                 if not display.is_file() or not thumb.is_file() or display.is_symlink() or thumb.is_symlink():
+                    if downloaded >= MAX_NEW_PHOTOS or time.monotonic() - started > 300:
+                        pending = True
+                        continue
                     if (file_count + 2 > MAX_CACHE_FILES or byte_count + 8_000_000 > MAX_CACHE_BYTES
                             or shutil.disk_usage(cache).free < MIN_FREE_BYTES + 8_000_000):
                         raise AuraError('Aura photo cache space budget reached')
@@ -296,12 +298,15 @@ def synchronize(client, frame_id, directory):
                     raw = client.image(asset)
                     normalize(raw, display)
                     normalize(raw, thumb, thumbnail=True)
+                    downloaded += 1
                     file_count += len(fresh)
                     byte_count += sum(path.stat().st_size for path in fresh)
                 photos.append({'id': pid})
+            if pending and not photos:
+                raise AuraError('Aura sync has no completed photos yet; retry locally')
             stamp = datetime.now(timezone.utc).isoformat()
             atomic_json(directory / 'manifest.json', {'syncedAt': stamp, 'photos': photos,
-                         'windowLimited': getattr(client, 'window_limited', False) is True})
+                         'windowLimited': getattr(client, 'window_limited', False) is True, 'syncPending': pending})
             published = True
             atomic_json(directory / 'status.json', {'state': 'current', 'updatedAt': stamp})
             # Only old generated JPEGs are eligible, after publication and a grace
@@ -357,6 +362,7 @@ def setup(config_dir=CONFIG, data=DEFAULT_DATA):
     config['photos'] = {'source': 'aura'}
     atomic_json(path, config)
     print(f'Aura connected. Published {count} photos. The Aura password was not saved.')
+    print('Large selections fill in batches during automatic sync; the dashboard labels this progress.')
 
 
 def main():
