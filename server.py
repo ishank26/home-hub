@@ -30,6 +30,7 @@ from pathlib import Path
 from urllib.parse import parse_qs
 
 from camera_stream import LiveCamera
+from govee import from_config as govee_from_config
 from integrations import CameraInactive, SourceUnavailable, from_config, private_json
 from photos import PhotoLibrary
 from weather import Weather, empty_weather
@@ -200,13 +201,14 @@ def photo_svg(index):
 
 
 class Hub:
-    def __init__(self, store, integrations=None, photos=None, weather=None, shopping=None):
+    def __init__(self, store, integrations=None, photos=None, weather=None, shopping=None, govee=None):
         self.store = store
         self.integrations = integrations
         self.live_camera = LiveCamera(integrations) if integrations is not None else None
         self.photos = photos
         self.weather_provider = weather
         self.shopping_bridge = shopping
+        self.govee = govee
         self.today_jobs = {}
         self.today_lock = threading.Lock()
         if self.store.read('shopping', None) is None:
@@ -292,11 +294,18 @@ class Hub:
             next(source for source in sources if source['id'] == 'weather').update(self.weather_provider.health)
         if self.shopping_bridge is not None:
             next(source for source in sources if source['id'] == 'shopping').update(self.shopping_bridge.health)
+        if self.govee is not None:
+            sources.append({'id': 'govee', 'name': 'Govee cloud lights', **self.govee.health})
         return {'sources': sources}
 
     def home_data(self):
         if self.integrations is not None:
-            return self.integrations.home()
+            if self.govee is not None:
+                self.govee.lights()  # start bounded cloud reads before HA; never wait
+            data = self.integrations.home()
+            if self.govee is not None:
+                data = dict(data, lights=data['lights'] + self.govee.lights())
+            return data
         return {'source': 'sample', 'updatedAt': iso(now()), **self.home, 'alerts': self.alerts()}
 
     def alerts(self):
@@ -310,6 +319,8 @@ class Hub:
         return found
 
     def home_action(self, body):
+        if self.govee is not None and str(body.get('id', '')).startswith('g'):
+            return self.govee.action(body)
         if self.integrations is not None:
             return self.integrations.action(body)
         kind = body.get('kind')
@@ -647,7 +658,7 @@ def main():
     shopping = ShoppingBridge(ha, store, CATEGORIES, QUICK_ADD) if ha is not None and config.get('shopping', {}).get('source') == 'homeassistant' else None
     hub = Hub(store, ha,
               PhotoLibrary(DATA / 'photos', enabled=config.get('photos', {}).get('source') == 'aura'),
-              Weather(config.get('weather')) if args.config else None, shopping)
+              Weather(config.get('weather')) if args.config else None, shopping, govee_from_config(config))
     server = ThreadingHTTPServer((args.host, args.port), make_handler(hub, allowed, token))
     extra = ''.join(', ' + str(address) for address in allowed)
     guard = f'; LAN clients need the token in {args.token_file}' if token else ''

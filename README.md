@@ -185,7 +185,7 @@ and the mirror picks them up after sync. [Protocol and operation](docs/aura-prot
 
 Full backend/image tests: `~/.local/share/home-hub/aura-venv/bin/python -m unittest discover -s tests -v`.
 The normal stdlib-only test run skips the five Pillow-dependent test methods when
-Pillow is absent; the dedicated-runtime verification now runs 79 tests with no skips.
+Pillow is absent; the dedicated-runtime verification now runs 88 tests with no skips.
 Photo browser flow: `NODE_PATH=/tmp/home-hub-browser/node_modules node tests/ui-aura.cjs`.
 
 Camera browser flow: `NODE_PATH=/tmp/home-hub-browser/node_modules node tests/ui-camera.cjs`.
@@ -193,3 +193,9 @@ Camera browser flow: `NODE_PATH=/tmp/home-hub-browser/node_modules node tests/ui
 Live video runtime: `scripts/install-stream-runtime` installs one hash-pinned
 websocket dependency and a service interpreter drop-in. hls.js is served locally;
 ordinary Python runs retain the other dashboard features without that runtime.
+
+Optional Govee cloud bulbs: `python3 scripts/configure-govee` accepts a key at a
+hidden local prompt, discovers official cloud light capabilities, and requires
+explicit selection of up to four lights. API keys stay in the private secrets
+file. This is an independent dashboard connector, not an installed HA custom
+integration. Browser QA: `NODE_PATH=/tmp/home-hub-browser/node_modules node tests/ui-govee.cjs`.

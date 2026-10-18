@@ -282,3 +282,52 @@ settings need owner verification.
 The Fire TV needs the official ADB integration and TV-side authorization before
 control; no network debugging was enabled. Both existing Cast speakers now report available state after direct-host setup. H100/T110, C246D, D205 and Govee enrollment still require the missing
 network/device or exact-variant evidence described in the infrastructure runbook.
+
+## Follow-up device choices — 2026-10-17
+
+Owner skipped LG laundry, Roku and other TVs. Their unfinished setup forms were
+closed. Nest is confirmed third-generation; owner rejected the paid Device Access
+route and requested a free alternative. A pinned Nest Legacy source release is
+being evaluated; no custom Nest integration is installed. The provided upstream
+subnet doorbell address is a Tapo doorbell, not the thermostat. Targeted discovery
+received no device response. Owner subsequently confirmed Tapo D205. TP-Link
+confirms that this model supports neither RTSP nor ONVIF; a live dashboard stream
+is not connected. See the [manufacturer response](https://community.tp-link.com/en/home/forum/topic/858054).
+Private addresses stay outside this document.
+
+The second C110 main stream decoded at 2304 × 1296 on desktop but rendered green
+on the actual frame. Its existing HA MinorStream entity was enabled and privately
+selected instead. That stream decoded at 640 × 360, advanced twenty seconds with
+roughly two hundred frames in browser QA, and rendered an actual image on the
+frame. A narrow bottom-edge decoder-padding artifact remains on that frame.
+The first camera's 1080p stream rendered correctly. Desktop decoding alone is not
+hardware acceptance. No camera-wide encoding or quality setting was changed.
+
+## Govee official cloud connector
+
+Owner reported no LAN Control toggle. An optional direct connector to Govee's
+[official API](https://developer.govee.com/reference/get-you-devices) is implemented
+and independently reviewed. No HA custom integration or network change is needed.
+The owner requests an API key in Govee Home settings and runs:
+
+```sh
+python3 ~/work/home-hub/scripts/configure-govee
+systemctl --user restart home-hub.service
+```
+
+The helper hides the key, lists only cloud devices identified as lights with an
+on/off capability, and requires explicit selection of one to four. State must be
+online and confirmed before private selections are saved. Keys and raw device
+identifiers never reach browsers or Git. The default configuration does not enable
+Govee. A live account/key and device acceptance remain outstanding.
+
+HTTPS uses only three fixed vendor routes, with TLS validation, no environment
+proxy or redirects, bounded replies and sanitized errors. Read jobs are limited
+to one per selected light and four workers; Home never waits on cloud reads.
+Successes/failures are cached for sixty seconds, expired pending state is disabled,
+and rate-limit responses back off. Cloud outages preserve working HA controls.
+Only exact on/off commands are supported, with fresh online checks and readback
+before confirmation. In-flight old reads cannot overwrite a confirmed command.
+This connects bulbs to the dashboard; it does not create HA bulb entities.
+Eight focused backend tests and the browser fixture cover cloud outages, expired
+state, command confirmation, provider rate limits, key isolation and Home latency.

@@ -1,4 +1,4 @@
-/* Home Hub: no dependencies, no credentials, Chrome/WebView 106 compatible. */
+/* Home Hub: local HLS player, no credentials, Chrome/WebView 106 compatible. */
 (() => {
   "use strict";
   const $ = (s, root = document) => root.querySelector(s);
@@ -1093,11 +1093,13 @@
         photos: "/api/photos/manifest",
         shopping: "/api/shopping",
         home: "/api/home",
+        govee: "/api/home",
       };
     try {
       const r = await request(paths[src.id]);
+      const cloudPending = src.id === "govee" && !r.data.lights.filter(l=>l.id.startsWith("g")).every(l=>l.available);
       toast(
-        r.stale
+        cloudPending ? "Govee unavailable or refreshing · Retry shortly" : r.stale
           ? "Still unavailable · showing cached data"
           : r.data.source === "sample"
             ? "Sample source refreshed"

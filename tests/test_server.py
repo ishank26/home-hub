@@ -173,6 +173,30 @@ class ServerTests(unittest.TestCase):
         sources = self.api('/api/status')['sources']
         self.assertEqual(next(s for s in sources if s['id'] == 'photos')['state'], 'stale')
 
+    def test_slow_cloud_does_not_delay_or_disable_working_home_assistant(self):
+        from unittest.mock import Mock
+        from govee import GoveeCloud
+        gate=threading.Event()
+        cloud=GoveeCloud([{'sku':'H6008','device':'00:00:00:00:00:00:00:01'}],'synthetic-govee-key')
+        self.hub.govee=cloud
+        ha=Mock()
+        def home():
+            time.sleep(.05)
+            return {'source':'homeassistant','lights':[{'id':'local','available':True,'on':True}]}
+        ha.home.side_effect=home;self.hub.integrations=ha
+        def read(entry):
+            gate.wait(1)
+            raise server.SourceUnavailable('synthetic cloud outage')
+        try:
+            with patch.object(cloud,'read',side_effect=read):
+                start=time.monotonic();status,_,raw=self.request('/api/home')
+                self.assertLess(time.monotonic()-start,.25)
+                data=json.loads(raw);self.assertEqual(status,200)
+                self.assertTrue(data['lights'][0]['available'])
+                self.assertFalse(data['lights'][1]['available'])
+        finally:
+            gate.set();cloud.pool.shutdown(wait=True,cancel_futures=True)
+
     def test_live_camera_routes_require_json_and_never_cache_or_forward_queries(self):
         from unittest.mock import Mock
         from integrations import CameraInactive

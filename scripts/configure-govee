@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+"""Local hidden Govee API key entry and explicit cloud light selection."""
+import getpass
+import json
+import os
+import re
+import sys
+import tempfile
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from govee import GoveeCloud
+from integrations import private_json
+
+
+def save(path, value):
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix='.govee-setup-')
+    try:
+        with os.fdopen(fd, 'w') as handle:
+            json.dump(value, handle, indent=2); handle.flush(); os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    finally:
+        Path(tmp).unlink(missing_ok=True)
+
+
+def main():
+    directory = Path.home() / '.config/home-hub'
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    config = private_json(directory/'config.json')
+    secrets = private_json(directory/'secrets.json')
+    key = getpass.getpass('Govee API key (hidden; blank keeps saved key): ') or secrets.get('govee_api_key', '')
+    if not re.fullmatch(r'[A-Za-z0-9_-]{16,128}', key):
+        raise ValueError('Missing or invalid key')
+    # A disposable instance performs only the fixed official discovery request.
+    discovery = GoveeCloud([{'sku':'H6008','device':'00:00:00:00:00:00:00:00'}], key)
+    try:
+        found = discovery.request('user/devices').get('data')
+    finally:
+        discovery.pool.shutdown(wait=False, cancel_futures=True)
+    if not isinstance(found, list) or len(found) > 200:
+        raise ValueError('Invalid device response')
+    lights = []
+    for e in found:
+        if not isinstance(e, dict) or e.get('type') != 'devices.types.light':
+            continue
+        caps = e.get('capabilities', [])
+        if not isinstance(caps, list) or not any(isinstance(c, dict) and c.get('type') == 'devices.capabilities.on_off'
+                and c.get('instance') == 'powerSwitch' for c in caps):
+            continue
+        name = str(e.get('deviceName', 'Govee light'))[:80]
+        lights.append({'sku':e.get('sku'), 'device':e.get('device'), 'name':name})
+        print(str(len(lights))+': '+re.sub(r'[\x00-\x1f\x7f]', '', name)+' ('+str(e.get('sku'))+')')
+    if not lights:
+        raise ValueError('No supported cloud lights found')
+    selection = input('Select up to four light numbers, separated by commas: ').strip()
+    indices = [int(i.strip())-1 for i in selection.split(',')]
+    if not 0 < len(indices) <= 4 or len(set(indices)) != len(indices) or any(i < 0 or i >= len(lights) for i in indices):
+        raise ValueError('Invalid light selection')
+    entries = [lights[i] for i in indices]
+    adapter = GoveeCloud(entries, key)
+    try:
+        for e in entries:
+            if not adapter.read(e)['available']:
+                raise ValueError('A selected light is offline or has no confirmed state')
+    finally:
+        adapter.pool.shutdown(wait=False, cancel_futures=True)
+    config['govee'] = {'lights': entries}
+    secrets['govee_api_key'] = key
+    save(directory/'secrets.json', secrets)
+    save(directory/'config.json', config)
+    print('Selected lights verified and saved privately. Run: systemctl --user restart home-hub.service')
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (Exception, KeyboardInterrupt):
+        raise SystemExit('Govee setup did not finish. Check the API key, selected lights and cloud connectivity locally.') from None
