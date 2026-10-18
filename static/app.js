@@ -15,6 +15,7 @@
     home: "Smart Home",
     settings: "Settings",
     recipes: "Recipes",
+    browser: "Browser",
   };
   const svg = (content, size = 26) =>
     `<svg aria-hidden="true" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${content}</svg>`;
@@ -40,6 +41,7 @@
     ),
   ];
   icons.push(svg('<path d="M4 3h12a3 3 0 0 1 3 3v15H7a3 3 0 0 1-3-3V3zM7 17h12M8 7h7M8 11h5"></path>'));
+  icons.push(svg('<circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a18 18 0 0 1 0 18 18 18 0 0 1 0-18z"></path>'));
   const esc = (value) =>
     String(value == null ? "" : value).replace(
       /[&<>"']/g,
@@ -861,7 +863,12 @@
   document.addEventListener('input',e=>{
     if(e.target.id==='recipe-filter'){recipeQuery=e.target.value;renderHTML($('.recipe-cards'),recipeCards());}
   });
-  function browseRecipes(query = "") {
+  let browserQuery='';
+  function browser() {
+    frame('Browser',{data:{}},`<div class="recipe-scroll"><div class="card recipe-intro"><h2>Browse the web</h2><form id="browser-form"><label for="browser-address">Search or enter a website</label><div class="recipe-input-row"><input id="browser-address" name="query" maxlength="2048" autocomplete="off" value="${esc(browserQuery)}" placeholder="Search words or https://…"><button class="btn primary" type="submit">Go</button></div></form><p>${button('Open browser','browseropen')}</p><p class="meta">Uses the tablet’s lightweight browser. Back, forward and reload controls are at the top; Dashboard returns here. On a computer, websites open in a separate tab.</p></div></div>`);
+  }
+  document.addEventListener('input',e=>{if(e.target.id==='browser-address')browserQuery=e.target.value;});
+  function browseRecipes(query = "", recipe = true) {
     const text=String(query).trim().slice(0,2048);
     if (navigator.userAgent.includes("HomeHubKiosk/")) {
       location.assign("homehub://browse?query="+encodeURIComponent(text));
@@ -876,7 +883,7 @@
       } catch {toast("Use a public HTTPS website address, or enter search words");return;}
     } else if(text) target+="?q="+encodeURIComponent(text);
     window.open(target,"_blank","noopener,noreferrer");
-    toast("Copy the recipe address, return here, and paste it into Recipe link",null,"Undo",9000);
+    toast(recipe ? "Copy the recipe address, return here, and paste it into Recipe link" : "Opened in a separate browser tab",null,"Undo",9000);
   }
   async function shareRecipe(reader=false) {
     const url=reader ? location.origin+"/?recipeId="+encodeURIComponent(activeRecipe.id) : activeRecipe.url;
@@ -1432,6 +1439,7 @@
     }
   }
   const renders = {
+    browser,
     recipes,
     today,
     calendar,
@@ -1444,6 +1452,7 @@
 
   async function action(value) {
     const [kind, arg, delta] = value.split(":");
+    if (kind === "browseropen") return browseRecipes("",false);
     if (kind === "recipebrowse") return browseRecipes();
     if (kind === "recipevisit") return browseRecipes(activeRecipe.url);
     if (kind === "recipeback") {activeRecipe=null;recipeEditing=false;recipeFocus=false;recipeDone.clear();return navigate("recipes");}
@@ -1648,6 +1657,7 @@
     else if (e.target.classList.contains("modal-back")) closeModal();
   });
   document.addEventListener("submit", (e) => {
+    if (e.target.id === "browser-form") {e.preventDefault();browseRecipes(new FormData(e.target).get("query"),false);return;}
     if (e.target.id === "recipe-edit-form") {
       e.preventDefault();const values=Object.fromEntries(new FormData(e.target));
       values.ingredients=values.ingredients.split('\n');values.steps=values.steps.split('\n');values.tags=values.tags.split(',').map(x=>x.trim()).filter(Boolean);

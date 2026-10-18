@@ -245,7 +245,9 @@ returns to Home Hub. No private project source, credentials or remote database i
 bundled in this repository. Browser QA: `node tests/ui-recipes.cjs`.
 
 
-The tablet kiosk v0.5 includes a lightweight single-tab WebView browser. In
+The sidebar has a separate **Browser** tab with search/address entry and an
+**Open browser** button. It uses the existing lightweight single-tab WebView
+browser in kiosk v0.5. In
 **Recipes → Find on web**, enter search words or a website and choose **Search / Browse**. Open
 an actual recipe page, then use the native **Read recipe** button to return to
 focus reading automatically. **Dashboard** returns without importing. The browser

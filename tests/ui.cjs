@@ -59,7 +59,7 @@ const { chromium } = require("playwright");
     await page.goto(base);
     await page.locator(".clock-big").waitFor();
     await page.evaluate(() => document.fonts.ready);
-    assert.equal(await page.locator(".rail-item").count(), 8);
+    assert.equal(await page.locator(".rail-item").count(), 9);
     assert.equal(
       await page
         .locator("#rail")
@@ -82,10 +82,25 @@ const { chromium } = require("playwright");
             photos: "Photos",
             home: "Smart Home",
             settings: "Settings",
+            browser: "Browser",
           }[id],
         })
         .waitFor();
     };
+    await nav("browser");
+    await page.evaluate(()=>{window.__browserOpens=[];window.open=(url,target,features)=>{window.__browserOpens.push({url,target,features});return {};};});
+    await page.getByLabel('Search or enter a website',{exact:true}).fill('weather & gardening');
+    await page.getByRole('button',{name:'Go',exact:true}).click();
+    const browserOpen=await page.evaluate(()=>window.__browserOpens[0]);
+    assert.equal(browserOpen.url,'https://duckduckgo.com/?q=weather%20%26%20gardening');
+    assert.equal(browserOpen.features,'noopener,noreferrer');
+    await page.getByLabel('Search or enter a website',{exact:true}).fill('javascript:alert(1)');
+    await page.getByRole('button',{name:'Go',exact:true}).click();
+    assert.equal(await page.evaluate(()=>window.__browserOpens.length),1);
+    await page.getByRole('button',{name:'Open browser',exact:true}).click();
+    assert.equal(await page.evaluate(()=>window.__browserOpens[1].url),'https://duckduckgo.com/');
+    await page.screenshot({path:'/tmp/home-hub-browser-sidebar.png'});
+    await nav('today');
     const fits = async () => {
       const fitsStage = await page.evaluate(
         () => document.querySelector("#main").scrollHeight <= 800,
@@ -365,7 +380,7 @@ const { chromium } = require("playwright");
     assert.deepEqual(errors, []);
     assert.deepEqual(external, []);
     console.log(
-      "UI tests passed: eight navigation entries, mutations, injection, stale fallback, modals, saver, idle, night, admin hold, scaling.",
+      "UI tests passed: nine navigation entries, mutations, injection, stale fallback, modals, saver, idle, night, admin hold, scaling.",
     );
   } finally {
     if (browser) await browser.close();
