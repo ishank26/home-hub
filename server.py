@@ -34,6 +34,7 @@ from govee import from_config as govee_from_config
 from integrations import CameraInactive, SourceUnavailable, from_config, private_json
 from photos import PhotoLibrary
 import recipe_tracker
+from phone_sharing import PhonePairing
 from recipes import read_recipe
 from recipe_catalog import RecipeCatalog, CatalogError, MAX_LEGACY_RECIPE
 from weather import Weather, empty_weather
@@ -379,6 +380,7 @@ def load_token(path):
 
 
 def make_handler(hub, allowed, token=None):
+    phone_pairing=PhonePairing()
     class Handler(SimpleHTTPRequestHandler):
         server_version = 'HomeHub/0.1'
         sys_version = ''
@@ -434,7 +436,7 @@ def make_handler(hub, allowed, token=None):
             path = self.path.split('?', 1)[0]
             shell = path in ('/', '/index.html', '/app.js', '/app.css', '/photo-cache.js',
                              '/recipe_tracker/', '/recipe_tracker/compat.js', '/recipe_tracker/hub.css')
-            policy = 'no-store' if path.startswith(('/api/', '/pair', '/camera/')) else 'no-cache' if shell else 'max-age=300'
+            policy = 'no-store' if path.startswith(('/api/', '/pair', '/camera/', '/phone/')) else 'no-cache' if shell else 'max-age=300'
             self.send_header('Cache-Control', policy)
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('Referrer-Policy', 'no-referrer')
@@ -474,6 +476,9 @@ def make_handler(hub, allowed, token=None):
             path, _, query = self.path.partition('?')
             if path == '/pair':
                 return self.pair(query)
+            # Public shell only on admitted networks; APIs still require pairing.
+            if path in {'/phone/','/phone/index.html','/phone/phone.css','/phone/phone.js','/phone/manifest.webmanifest','/phone/icon.svg','/phone/icon-192.png','/phone/icon-512.png','/phone/sw.js'} and self.peer_permitted():
+                return super().do_GET()
             if not self.allowed():
                 return
             try:
@@ -581,11 +586,29 @@ def make_handler(hub, allowed, token=None):
                 self.reply({'error': 'bad request'}, 400)
 
         def do_POST(self):
+            if self.path == '/api/phone/pair':
+                if not self.peer_permitted() or token is None:
+                    return self.send_error(HTTPStatus.FORBIDDEN)
+                try:
+                    body=self.body(256)
+                    if not phone_pairing.consume(body.get('code')):
+                        return self.reply({'error':'Code invalid or expired. Create another on your paired Home Hub.'},403)
+                    self.send_response(200)
+                    self.send_header('Set-Cookie',f'{TOKEN_COOKIE}={token}; Max-Age=31536000; Path=/; HttpOnly; SameSite=Strict')
+                    self.send_header('Content-Length','0')
+                    self.end_headers()
+                except (ValueError,KeyError):
+                    self.reply({'error':'bad request'},400)
+                return
             if not self.allowed():
                 return
             try:
                 body = self.body()
-                if self.path == '/api/recipes':
+                if self.path == '/api/phone/code':
+                    if token is None:return self.reply({'error':'Device pairing is not configured.'},400)
+                    try:self.reply(phone_pairing.create())
+                    except ValueError as error:self.reply({'error':str(error)},429)
+                elif self.path == '/api/recipes':
                     try:
                         recipe = body['recipe'] if 'recipe' in body else read_recipe(body.get('url'))
                         with LOCK:
