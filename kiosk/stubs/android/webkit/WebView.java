@@ -8,6 +8,7 @@ public class WebView extends View {
     public WebSettings getSettings() { throw new RuntimeException(); }
     public void setWebViewClient(WebViewClient client) { throw new RuntimeException(); }
     public void setBackgroundColor(int color) { throw new RuntimeException(); }
+    public void evaluateJavascript(String script,ValueCallback<String> result){throw new RuntimeException();}
     public void loadUrl(String url) { throw new RuntimeException(); }
     public void loadData(String data, String mimeType, String encoding) { throw new RuntimeException(); }
     public String getUrl() { throw new RuntimeException(); }

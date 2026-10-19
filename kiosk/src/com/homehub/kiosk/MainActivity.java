@@ -46,6 +46,9 @@ public class MainActivity extends Activity {
 
     private final Handler handler = new Handler();
     private WebView web;
+    private android.widget.FrameLayout root;
+    private BrowserPanel browser;
+    private int brightness;
     private String url = DEFAULT_URL;
     private boolean retryPending;
 
@@ -89,7 +92,7 @@ public class MainActivity extends Activity {
         settings.setAllowFileAccess(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setTextZoom(100);
-        settings.setUserAgentString(settings.getUserAgentString() + " HomeHubKiosk/0.5");
+        settings.setUserAgentString(settings.getUserAgentString() + " HomeHubKiosk/0.6");
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String target) {
@@ -100,12 +103,18 @@ public class MainActivity extends Activity {
                         try {
                             URI action = new URI(target);
                             String query = action.getRawQuery();
+                            if ("browser-close".equals(action.getHost())) closeBrowser();
+                            if ("brightness".equals(action.getHost()) && query != null && query.matches("value=[0-9]{2,3}")) {
+                                brightness=PanelBounds.brightness(query.substring(6));
+                                getSharedPreferences("kiosk",0).edit().putInt("brightness",brightness).apply();
+                                applyBrightness();
+                            }
                             if ("browse".equals(action.getHost()) && query != null && query.startsWith("query=")
                                     && query.indexOf('&') == -1 && query.length() <= 6500) {
                                 String input = URLDecoder.decode(query.substring(6), "UTF-8");
                                 if (input.length() <= 2048) {
                                     handler.removeCallbacks(retry);retryPending=false;
-                                    startActivityForResult(new Intent(MainActivity.this, BrowserActivity.class).putExtra("query", input), 42);
+                                    openBrowser(input);
                                 }
                             }
                         } catch (Exception ignored) { /* malformed action: no navigation */ }
@@ -114,11 +123,14 @@ public class MainActivity extends Activity {
                 }
                 if (trusted.length() > 0 && trusted.equals(BrowserPolicy.origin(target))) return false;
                 if (fromHub && BrowserPolicy.isPublicHttps(target)) {
-                    startActivityForResult(new Intent(MainActivity.this, BrowserActivity.class).putExtra("query", target),42);
+                    openBrowser(target);
                 }
                 return true;
             }
 
+            @Override public void onPageFinished(WebView view,String target) {
+                if (BrowserPolicy.origin(url).equals(BrowserPolicy.origin(target))) deviceState();
+            }
             @Override
             public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
                 view.loadData("<body style=\"background:#000;color:#999;font:28px sans-serif;"
@@ -130,7 +142,15 @@ public class MainActivity extends Activity {
                 }
             }
         });
-        setContentView(web);
+        root=new android.widget.FrameLayout(this) {
+            @Override protected void onSizeChanged(int w,int h,int oldw,int oldh) {
+                super.onSizeChanged(w,h,oldw,oldh); layoutBrowser();
+            }
+        };
+        root.addView(web,new android.widget.FrameLayout.LayoutParams(-1,-1));
+        setContentView(root);
+        brightness=getSharedPreferences("kiosk",0).getInt("brightness",70);
+        brightness=Math.max(10,Math.min(100,brightness));applyBrightness();
         web.loadUrl(url);
     }
 
@@ -143,17 +163,34 @@ public class MainActivity extends Activity {
         }
     }
 
-    @Override
-    protected void onActivityResult(int request, int result, Intent data) {
-        super.onActivityResult(request,result,data);
-        if (request != 42 || result != -1 || data == null) return;
-        String source=data.getStringExtra("recipe");
-        String hub=BrowserPolicy.origin(url);
-        if (hub.length() > 0 && BrowserPolicy.isPublicHttps(source)) {
-            // Keep the saved boot/pair URL untouched. The publisher never sees it.
-            handler.removeCallbacks(retry);retryPending=false;
-            web.loadUrl(hub + "/?recipe=" + BrowserPolicy.encode(source));
-        }
+    private void applyBrightness() {
+        android.view.WindowManager.LayoutParams params=getWindow().getAttributes();
+        params.screenBrightness=brightness/100f;getWindow().setAttributes(params);
+    }
+    private void deviceState() {
+        web.evaluateJavascript("window.dispatchEvent(new CustomEvent('homehub:device',{detail:{brightness:"+brightness+",browserEmbedded:true}}))",null);
+    }
+    private void layoutBrowser() {
+        if(browser==null)return;
+        int[] b=PanelBounds.at(root.getWidth(),root.getHeight());
+        android.widget.FrameLayout.LayoutParams params=new android.widget.FrameLayout.LayoutParams(b[2],b[3]);
+        params.leftMargin=b[0];params.topMargin=b[1];browser.setLayoutParams(params);
+    }
+    private void openBrowser(String query) {
+        closeBrowser();
+        browser=new BrowserPanel(this,query,new BrowserPanel.Listener() {
+            public void close(){closeBrowser();}
+            public void recipe(String source){
+                if(!BrowserPolicy.isPublicHttps(source))return;
+                closeBrowser();web.loadUrl(BrowserPolicy.origin(url)+"/?recipe="+BrowserPolicy.encode(source));
+            }
+        });
+        root.addView(browser,new android.widget.FrameLayout.LayoutParams(-1,-1));layoutBrowser();
+        web.evaluateJavascript("window.dispatchEvent(new CustomEvent('homehub:browser',{detail:true}))",null);
+    }
+    private void closeBrowser() {
+        if(browser!=null){root.removeView(browser);browser.dispose();browser=null;}
+        if(web!=null)web.evaluateJavascript("window.dispatchEvent(new CustomEvent('homehub:browser',{detail:false}))",null);
     }
 
     private boolean saveRequestedUrl(Intent intent) {
@@ -170,11 +207,13 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         web.onResume();
+        if(browser!=null)browser.resume();
         hideSystemBars();
     }
 
     @Override
     protected void onPause() {
+        if(browser!=null)browser.pause();
         web.onPause();
         super.onPause();
     }
@@ -183,6 +222,7 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         handler.removeCallbacks(retry);
         handler.removeCallbacks(exit);
+        closeBrowser();
         web.destroy();
         super.onDestroy();
     }
@@ -209,6 +249,7 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if(browser!=null){browser.back();return;}
         if (web.canGoBack()) {
             web.goBack();
         }

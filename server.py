@@ -431,7 +431,11 @@ def make_handler(hub, allowed, token=None):
             self.end_headers()
 
         def end_headers(self):
-            self.send_header('Cache-Control', 'no-store' if self.path.startswith(('/api/', '/pair', '/camera/')) else 'max-age=300')
+            path = self.path.split('?', 1)[0]
+            shell = path in ('/', '/index.html', '/app.js', '/app.css', '/photo-cache.js',
+                             '/recipe_tracker/', '/recipe_tracker/compat.js', '/recipe_tracker/hub.css')
+            policy = 'no-store' if path.startswith(('/api/', '/pair', '/camera/')) else 'no-cache' if shell else 'max-age=300'
+            self.send_header('Cache-Control', policy)
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('Referrer-Policy', 'no-referrer')
             super().end_headers()

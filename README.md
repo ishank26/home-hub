@@ -63,8 +63,9 @@ Three local OFL font faces are in `static/fonts/`, with licenses and provenance.
 Inactivity follows the handoff's **sequential** state chain: another tab returns to
 Today after `returnTodayMinutes` (default 2), then spends `idleMinutes` (default 3)
 on Today before screensaver/night. Starting on Today uses its 3-minute delay directly.
-Quiet hours select night mode when idle; physical brightness needs the later kiosk
-integration. Wake always restarts the idle timer.
+Quiet hours select night mode when idle. Settings → Display controls tablet window
+brightness from 10–100%, remembered across kiosk restarts without extra permissions.
+Wake always restarts the idle timer.
 
 All API text is escaped before rendering, with a second HTML/attribute allowlist.
 Only same-origin opaque photo routes and fetched camera blob URLs are allowed as image sources. The browser
@@ -235,7 +236,10 @@ to accommodate larger recipes retained from the previous reader. Lists send
 metadata only; full text is fetched when a recipe opens. No publisher images or
 page archives are downloaded.
 
-**Open Recipe Tracker** launches a local copy of the owner's published demo build.
+**Recipes** stays inside the dashboard with its saved catalog and reader.
+**Open Recipe Tracker** is an optional launch button for the separate locally
+hosted app. Existing recipe reader links still work. Dashboard shell files
+revalidate on reload so a refresh picks up published updates.
 Install it with `python3 scripts/install-recipe-tracker`: three hash-pinned public
 assets (about 544 KB total) are verified and stored outside Git. The local route
 uses the existing dashboard admission rules and blocks provider/network calls;
@@ -247,16 +251,16 @@ bundled in this repository. Browser QA: `node tests/ui-recipes.cjs`.
 
 The sidebar has a separate **Browser** tab with search/address entry and an
 **Open browser** button. It uses the existing lightweight single-tab WebView
-browser in kiosk v0.5. In
+browser embedded beside the visible sidebar in kiosk v0.6. In
 **Recipes → Find on web**, enter search words or a website and choose **Search / Browse**. Open
 an actual recipe page, then use the native **Read recipe** button to return to
-focus reading automatically. **Dashboard** returns without importing. The browser
+focus reading automatically. **Close browser** returns without importing; any sidebar tab also closes the browser. The browser
 has an address bar, Back/Forward and Reload, and uses the existing system WebView
 rather than installing a new engine. Search uses DuckDuckGo. On ordinary desktop
 browsers, search opens a separate tab; copy its recipe URL and paste it back.
 To paste on the tablet, press and hold the recipe-link field and choose Paste.
 
-BrowserActivity is unexported and has no JavaScript/native bridge. Unsupported
+The public BrowserPanel has no JavaScript/native bridge. Unsupported
 schemes, IP-literal/local-name URLs, file/content access, mixed content and popup windows
 are blocked; certificate validation retains Android defaults. Browser disk cache
 and third-party cookies are disabled. Returning a recipe validates its URL again

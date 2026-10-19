@@ -143,6 +143,7 @@ class ServerTests(unittest.TestCase):
             status,headers,raw=self.request('/recipe_tracker/')
             self.assertEqual(status,200)
             self.assertIn("connect-src 'none'",headers['Content-Security-Policy'])
+            self.assertEqual(headers['Cache-Control'],'no-cache')
             self.assertEqual(raw,b'<h1>Recipe Tracker</h1>')
         self.assertEqual(self.request('/recipe_tracker/../../config.json')[0],404)
 
@@ -160,6 +161,8 @@ class ServerTests(unittest.TestCase):
                 self.assertNotIn('Access-Control-Allow-Origin', headers)
         for path in ['/', '/app.css', '/app.js', '/photos/p00.svg']:
             self.assertEqual(self.request(path)[0], 200)
+        for path in ['/', '/index.html', '/app.js?v=latest', '/app.css', '/photo-cache.js']:
+            self.assertEqual(self.request(path)[1]['Cache-Control'], 'no-cache')
         self.assertEqual(self.request('/api/missing')[0], 404)
         self.assertEqual(self.request('/api/quotes')[0], 404)
 

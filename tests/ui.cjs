@@ -45,7 +45,7 @@ const { chromium } = require("playwright");
       });
     }
     page.on("request", (request) => {
-      if (!request.url().startsWith(base)) external.push(request.url());
+      if (!request.url().startsWith(base) && !request.url().startsWith("homehub://brightness?value=")) external.push(request.url());
     });
     // Disable quiet hours for deterministic daytime/idle tests.
     await context.request.post(base + "/api/settings", {
@@ -87,6 +87,17 @@ const { chromium } = require("playwright");
         })
         .waitFor();
     };
+    await nav("settings");
+    assert.equal(await page.locator('#tablet-brightness').isDisabled(),true);
+    // Capability arrives only from the installed kiosk. Exercise sanitized markup too.
+    await page.evaluate(()=>Object.defineProperty(navigator,'userAgent',{value:navigator.userAgent+' HomeHubKiosk/0.6',configurable:true}));
+    await page.evaluate(()=>window.dispatchEvent(new CustomEvent('homehub:device',{detail:{brightness:70,browserEmbedded:true}})));
+    await page.locator('#tablet-brightness:not([disabled])').waitFor();
+    assert.equal(await page.locator('#tablet-brightness').getAttribute('min'),'10');
+    assert.equal(await page.locator('#tablet-brightness').getAttribute('max'),'100');
+    await page.locator('#tablet-brightness').fill('55');
+    assert.equal(await page.locator('#brightness-value').innerText(),'55%');
+    await page.evaluate(()=>Object.defineProperty(navigator,'userAgent',{value:navigator.userAgent.replace(' HomeHubKiosk/0.6',''),configurable:true}));
     await nav("browser");
     await page.evaluate(()=>{window.__browserOpens=[];window.open=(url,target,features)=>{window.__browserOpens.push({url,target,features});return {};};});
     await page.getByLabel('Search or enter a website',{exact:true}).fill('weather & gardening');

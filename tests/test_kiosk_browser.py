@@ -32,3 +32,17 @@ public class BrowserPolicyCheck {
             path=Path(folder)/'BrowserPolicyCheck.java';path.write_text(harness)
             subprocess.run(['javac','--release','8','-d',folder,str(source),str(path)],check=True,capture_output=True)
             subprocess.run(['java','-cp',folder,'BrowserPolicyCheck'],check=True,capture_output=True)
+
+    def test_embedded_panel_bounds_and_brightness_limits(self):
+        source=Path(__file__).resolve().parents[1]/'kiosk/src/com/homehub/kiosk/PanelBounds.java'
+        harness='''import com.homehub.kiosk.PanelBounds;
+public class PanelCheck { public static void main(String[] args) {
+ int[][] sizes={{1280,800,232,0,1048,800},{640,400,116,0,524,400},{1600,800,392,0,1048,800},{1280,1000,232,100,1048,800}};
+ for(int[] test:sizes){int[] got=PanelBounds.at(test[0],test[1]);for(int i=0;i<4;i++)if(got[i]!=test[i+2])throw new AssertionError("sidebar overlap");}
+ for(String bad:new String[]{"0","9","101","-1","NaN","70&url=x"}){try{PanelBounds.brightness(bad);throw new AssertionError("brightness out of bounds");}catch(IllegalArgumentException expected){}}
+ if(PanelBounds.brightness("10")!=10 || PanelBounds.brightness("100")!=100)throw new AssertionError("boundary rejected");
+ }}'''
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'PanelCheck.java';path.write_text(harness)
+            subprocess.run(['javac','--release','8','-d',folder,str(source),str(path)],check=True,capture_output=True)
+            subprocess.run(['java','-cp',folder,'PanelCheck'],check=True,capture_output=True)

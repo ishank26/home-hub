@@ -16,25 +16,27 @@ import android.webkit.CookieManager;
 import android.graphics.Bitmap;
 
 /** One transient public-web tab; no JS/native bridge, downloads or new permissions. */
-public class BrowserActivity extends Activity {
+public class BrowserPanel extends LinearLayout {
+    public interface Listener { void close(); void recipe(String url); }
+    private final Listener listener;
+    private final android.content.Context context;
     private WebView web;
     private EditText address;
     private TextView status;
     private Button back, forward, reload;
     private boolean loading;
 
-    @Override protected void onCreate(Bundle state) {
-        super.onCreate(state);
-        getWindow().setSoftInputMode(3); // initially hide keyboard
-        getWindow().addFlags(0x00000080); // keep screen on while cooking/browsing
-        LinearLayout root = new LinearLayout(this);
+    public BrowserPanel(android.content.Context context, String query, Listener listener) {
+        super(context); this.context=context; this.listener=listener;
+        LinearLayout root = this;
         root.setOrientation(1);
-        root.setBackgroundColor(0xFFFBFAF7);
-        LinearLayout entry = new LinearLayout(this);
-        address = new EditText(this);
+        root.setBackgroundColor(0xFFF6F1E8);
+        LinearLayout entry = new LinearLayout(context);
+        address = new EditText(context);
         address.setSingleLine(true);
         address.setSelectAllOnFocus(true);
         address.setTextSize(19);
+        address.setTextColor(0xFF302A24);address.setHintTextColor(0xFF756B60);address.setBackgroundColor(0xFFFFFCF7);
         address.setHint("Search or enter https://…");
         address.setInputType(1 | 16); // text URI
         address.setImeOptions(2); // Go
@@ -42,12 +44,12 @@ public class BrowserActivity extends Activity {
             @Override public boolean onEditorAction(TextView v, int id, KeyEvent event) { loadInput(); return true; }
         });
         entry.addView(address, new LinearLayout.LayoutParams(0,64,1));
-        Button go=new Button(this);go.setText("Go");
+        Button go=new Button(context);go.setText("Go");go.setTextColor(0xFFFFFFFF);go.setBackgroundColor(0xFF9C4D36);
         go.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { loadInput(); } });
         entry.addView(go,new LinearLayout.LayoutParams(120,-1));
         root.addView(entry,new LinearLayout.LayoutParams(-1,64));
-        LinearLayout tools = new LinearLayout(this);
-        addButton(tools,"Dashboard",new View.OnClickListener() { public void onClick(View v) { finish(); } });
+        LinearLayout tools = new LinearLayout(context);
+        addButton(tools,"Close browser",new View.OnClickListener() { public void onClick(View v) { listener.close(); } });
         back = addButton(tools,"Back",new View.OnClickListener() { public void onClick(View v) { if(web.canGoBack())web.goBack(); } });
         forward = addButton(tools,"Forward",new View.OnClickListener() { public void onClick(View v) { if(web.canGoForward())web.goForward(); } });
         reload=addButton(tools,"Reload",new View.OnClickListener() { public void onClick(View v) {
@@ -56,11 +58,11 @@ public class BrowserActivity extends Activity {
         } });
         addButton(tools,"Read recipe",new View.OnClickListener() { public void onClick(View v) { readRecipe(); } });
         root.addView(tools,new LinearLayout.LayoutParams(-1,60));
-        status = new TextView(this);
-        status.setTextSize(15);
+        status = new TextView(context);
+        status.setTextSize(15);status.setTextColor(0xFF756B60);
         status.setText("Open a recipe page, then tap Read recipe.");
         root.addView(status,new LinearLayout.LayoutParams(-1,28));
-        web = new WebView(this);
+        web = new WebView(context);
         WebSettings settings=web.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -99,19 +101,18 @@ public class BrowserActivity extends Activity {
             }
         });
         root.addView(web,new LinearLayout.LayoutParams(-1,0,1));
-        setContentView(root);
-        address.setText(getIntent().getStringExtra("query"));
+        address.setText(query);
         loadInput();
     }
 
     private Button addButton(LinearLayout row,String label,View.OnClickListener action) {
-        Button button=new Button(this);button.setText(label);button.setTextSize(17);button.setOnClickListener(action);
+        Button button=new Button(context);button.setText(label);button.setTextSize(17);button.setTextColor(0xFF302A24);button.setBackgroundColor(0xFFEAE3D7);button.setOnClickListener(action);
         row.addView(button,new LinearLayout.LayoutParams(0,-1,1));return button;
     }
     private void loadInput() {
         try {
             String target=BrowserPolicy.destination(((TextView)address).getText().toString());
-            android.view.inputmethod.InputMethodManager keyboard=(android.view.inputmethod.InputMethodManager)getSystemService("input_method");
+            android.view.inputmethod.InputMethodManager keyboard=(android.view.inputmethod.InputMethodManager)context.getSystemService("input_method");
             if(keyboard!=null)keyboard.hideSoftInputFromWindow(address.getWindowToken(),0);
             web.loadUrl(target);
         }
@@ -120,10 +121,10 @@ public class BrowserActivity extends Activity {
     private void readRecipe() {
         String target=web.getUrl();
         if(!BrowserPolicy.isPublicHttps(target)) { status.setText("Open an HTTPS recipe page first.");return; }
-        setResult(-1,new Intent().putExtra("recipe",target));finish();
+        listener.recipe(target);
     }
-    @Override public void onBackPressed() { if(web.canGoBack())web.goBack();else finish(); }
-    @Override protected void onPause() { web.onPause();super.onPause(); }
-    @Override protected void onResume() { super.onResume();if(web!=null)web.onResume(); }
-    @Override protected void onDestroy() { if(web!=null){web.stopLoading();web.clearHistory();web.destroy();}super.onDestroy(); }
+    public void back() { if(web.canGoBack())web.goBack();else listener.close(); }
+    public void pause() { web.onPause(); }
+    public void resume() { web.onResume(); }
+    public void dispose() { web.stopLoading();web.clearHistory();web.destroy(); }
 }

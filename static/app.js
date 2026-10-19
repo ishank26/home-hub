@@ -77,6 +77,7 @@
       "HEADER",
       "FORM",
       "INPUT",
+      "OUTPUT",
       "TEXTAREA",
       "SELECT",
       "OPTION",
@@ -99,6 +100,9 @@
       "value",
       "placeholder",
       "maxlength",
+      "min",
+      "max",
+      "step",
       "rows",
       "required",
       "autocomplete",
@@ -333,7 +337,7 @@
   function renderRail() {
     renderHTML(
       rail,
-      Object.entries(names)
+      '<div class="rail-brand">Home Hub</div>' + Object.entries(names)
         .map(([id, label], i) =>
           button(
             `<span aria-hidden="true">${icons[i]}</span>${label}`,
@@ -361,7 +365,7 @@
       sources.some((s) => ["stale", "failed"].includes(s.state));
     renderHTML(
       el,
-      `<i class="dot ${bad ? "warn" : sources.some((s) => s.state === "sample") ? "sample" : ""}"></i><span>${bad ? "Sources stale" : sources.some((s) => s.state === "sample") ? "Sample sources" : "Sources current"}</span>`,
+      `<i class="dot ${bad ? "warn" : sources.some((s) => s.state === "sample") ? "sample" : ""}"></i><span>${bad ? "Check connections" : sources.some((s) => s.state === "sample") ? "Preview mode" : "Connected"}</span>`,
     );
   }
   function alerts() {
@@ -423,6 +427,7 @@
   }
   async function navigate(view = state.view) {
     if (!names[view]) return;
+    if (nativeBrowserOpen && view!=="browser") {nativeBrowserOpen=false;location.assign("homehub://browser-close");}
     stage.classList.remove("recipe-focus");
     const switched = state.view !== view;
     if (state.mode === "active" && switched)
@@ -513,7 +518,7 @@
     frame(
       "Today",
       result,
-      `<div class="today-top"><div><div class="clock-big" data-clock></div><div class="date-big" data-date></div></div>${button(`<span style="font-size:64px" aria-hidden="true">${wxIcon(w.kind, 64)}</span><span><span class="t">${temp(w.temp)}</span><br><span class="s">${esc(w.summary)} · H ${temp(d.weather.daily[0]?.hi)} L ${temp(d.weather.daily[0]?.lo)}</span><br><span class="r">${esc(rainWindow(d.weather))}</span></span>`, "nav:weather", "wx-tile")}</div><div class="today-grid"><article class="card"><div class="card-head"><h2>Next up</h2>${button("Calendar ›", "nav:calendar", "link")}</div>${d.events.length ? d.events.map((e) => `<button class="ev-row item" data-action="event:${esc(e.id)}"><span class="time">${esc(time(e.start))}</span><i class="dot d-${color(e.calendar, d.calendars)}"></i><span class="title">${esc(e.title)}<span>${esc((d.calendars.find((c) => c.id === e.calendar) || {}).name)}</span></span><span class="pill ${d.events[0] === e ? "hot" : ""}" data-relative="${esc(e.id)}">${relative(e.start, e.end)}</span></button>`).join("") : `<div class="empty">${d.calendarSource === 'unconfigured' ? 'Calendar needs setup' : d.calendarSource === 'failed' ? 'Calendar unavailable' : 'Nothing coming up'}</div>`}</article><article class="card today-shopping" data-action="nav:shopping"><div class="card-head"><h2>Shopping</h2>${button("Open list ›", "nav:shopping", "link")}</div><div class="shop-count">${d.shoppingSource === "failed" ? "—" : d.shoppingOpen} <span>${d.shoppingSource === "failed" ? "Shopping unavailable" : "open items"}</span></div>${d.shoppingTop.map((i) => `<div class="mini-row row-line">${esc(i.name)}<span>${esc(i.qty)}</span></div>`).join("")}${d.shoppingOpen > 3 ? `<p class="meta">+ ${d.shoppingOpen - 3} more</p>` : ""}</article></div><div class="quote-line"><q>${esc(d.quote.text)}</q><span>— ${esc(d.quote.author)}</span></div>`,
+      `<div class="today-top"><div><div class="clock-big" data-clock></div><div class="date-big" data-date></div></div>${button(`<span class="wx-symbol" aria-hidden="true">${wxIcon(w.kind, 76)}</span><span><span class="t">${temp(w.temp)}</span><br><span class="s">${esc(w.summary)}</span><span class="wx-range">H ${temp(d.weather.daily[0]?.hi)} · L ${temp(d.weather.daily[0]?.lo)}</span><span class="r">${esc(rainWindow(d.weather))}</span></span>`, "nav:weather", "wx-tile")}</div><div class="today-grid"><article class="card"><div class="card-head"><h2>Next up</h2>${button("Calendar ›", "nav:calendar", "link")}</div>${d.events.length ? d.events.map((e) => `<button class="ev-row item" data-action="event:${esc(e.id)}"><span class="time">${esc(time(e.start))}</span><i class="dot d-${color(e.calendar, d.calendars)}"></i><span class="title">${esc(e.title)}<span>${esc((d.calendars.find((c) => c.id === e.calendar) || {}).name)}</span></span><span class="pill ${d.events[0] === e ? "hot" : ""}" data-relative="${esc(e.id)}">${relative(e.start, e.end)}</span></button>`).join("") : `<div class="empty">${d.calendarSource === 'unconfigured' ? 'Calendar needs setup' : d.calendarSource === 'failed' ? 'Calendar unavailable' : 'Nothing coming up'}</div>`}</article><article class="card today-shopping" data-action="nav:shopping"><div class="card-head"><h2>Shopping</h2>${button("Open list ›", "nav:shopping", "link")}</div><div class="shop-count">${d.shoppingSource === "failed" ? "—" : d.shoppingOpen} <span>${d.shoppingSource === "failed" ? "Shopping unavailable" : "open items"}</span></div>${d.shoppingTop.map((i) => `<div class="mini-row row-line">${esc(i.name)}<span>${esc(i.qty)}</span></div>`).join("")}${d.shoppingOpen > 3 ? `<p class="meta">+ ${d.shoppingOpen - 3} more</p>` : ""}</article></div><div class="quote-line"><q>${esc(d.quote.text)}</q><span>— ${esc(d.quote.author)}</span></div>`,
     );
     updateClocks();
     later(updateClocks, 1000);
@@ -815,8 +820,9 @@
     stage.classList.toggle('recipe-focus',recipeFocus);
     const controls=r ? `<div class="recipe-tools">${button('← Recipes','recipeback')}${r.saved ? '<span class="pill">Saved ✓</span>' : button('Save recipe','recipesave','btn primary')}${button('Edit','recipeedit')}${button('Delete','recipedelete')}${button(recipeFocus ? 'Exit focus' : 'Focus mode','recipefocus')}${button(recipeLarge ? 'Normal text' : 'Larger text','recipefont')}${r.url ? button('Share source','recipeshare')+button('Browse source','recipevisit') : ''}${button('Reader link','recipelink')}</div>` : '';
     const source=r?.url ? new URL(r.url).hostname : 'Your recipe';
-    let body=recipeEditing ? recipeEditor() : r ? `${controls}<article class="recipe-reader ${recipeLarge ? 'recipe-large' : ''}"><p class="meta">${esc(source)}${r.yield ? ' · Serves '+esc(r.yield) : ''}${r.totalTime ? ' · '+esc(r.totalTime.replace(/^PT/,'').toLowerCase()) : ''}</p><h1>${esc(r.title)}</h1>${r.description ? `<p>${esc(r.description)}</p>` : ''}${r.tags.length ? `<p class="meta">${esc(r.tags.join(' · '))}</p>` : ''}<h2>Ingredients</h2><div class="recipe-ingredients">${r.ingredients.map((x,i)=>button(`${recipeDone.has('i'+i) ? '✓ ' : '○ '}${esc(x)}`,'recipecheck:i'+i,'recipe-line',`aria-pressed="${recipeDone.has('i'+i)}"`)).join('')}</div><h2>Method</h2>${r.steps.map((x,i)=>button(`<b>${i+1}.</b><span>${esc(x)}</span>`,'recipecheck:s'+i,'recipe-line recipe-step',`aria-pressed="${recipeDone.has('s'+i)}"`)).join('')}${r.notes ? `<h2>Personal notes</h2><p class="recipe-notes">${esc(r.notes)}</p>` : ''}${r.url ? '<p class="meta">Source: '+esc(r.url)+'. Use Share source for the original recipe.</p>' : ''}</article>` : `<div class="recipe-library"><div class="recipe-tools">${button('Saved','recipetab:saved','chip',`aria-pressed="${recipeTab==='saved'}"`)}${button('Find on web','recipetab:find','chip',`aria-pressed="${recipeTab==='find'}"`)}${button('Recent','recipetab:recent','chip',`aria-pressed="${recipeTab==='recent'}"`)}${button('New recipe','recipenew','btn primary')}${button('Open Recipe Tracker','recipetracker')}</div>${recipeTab==='find' ? `<div class="card recipe-intro"><h2>Find something to cook</h2><p>Search the web, open a recipe, then tap <b>Read recipe</b> in the tablet browser.</p><form id="recipe-search-form"><label for="recipe-search">Search recipes or enter a website</label><div class="recipe-input-row"><input id="recipe-search" name="query" maxlength="2048" placeholder="Try: easy vegetarian dinner" autocomplete="off"><button class="btn primary" type="submit">Search / Browse</button></div></form><p class="meta">Search uses DuckDuckGo. ${button('Open browser','recipebrowse','link')}</p><form id="recipe-form"><label for="recipe-url">Or paste a recipe link</label><div class="recipe-input-row"><input id="recipe-url" name="url" type="url" required maxlength="4096" placeholder="https://…" autocomplete="off"><button class="btn primary" type="submit">Open recipe</button></div><p class="meta">To paste: press and hold the link field, then choose Paste.</p><p id="recipe-error" role="status"></p></form><p class="meta">Open a preview, then tap Save recipe to keep it.</p></div>` : `<label for="recipe-filter">Search ${recipeTab==='recent' ? 'recent previews' : 'saved recipes'}</label><input id="recipe-filter" class="recipe-filter" value="${esc(recipeQuery)}" maxlength="200" placeholder="Search titles or tags"><p class="meta">${recipeList.filter(x=>x.saved).length} / 200 saved · Stored on this server · Five recent previews retained</p><div class="recipe-cards">${recipeCards()}</div>`}<p class="meta">Recipe Tracker runs locally with its own browser library; it does not sync with this catalog.</p></div>`;
-    frame('Recipes',{data:{}},`<div class="recipe-scroll">${body}</div>`);
+    let body=recipeEditing ? recipeEditor() : r ? `${controls}<article class="recipe-reader ${recipeLarge ? 'recipe-large' : ''}"><p class="meta">${esc(source)}${r.yield ? ' · Serves '+esc(r.yield) : ''}${r.totalTime ? ' · '+esc(r.totalTime.replace(/^PT/,'').toLowerCase()) : ''}</p><h1>${esc(r.title)}</h1>${r.description ? `<p>${esc(r.description)}</p>` : ''}${r.tags.length ? `<p class="meta">${esc(r.tags.join(' · '))}</p>` : ''}<h2>Ingredients</h2><div class="recipe-ingredients">${r.ingredients.map((x,i)=>button(`${recipeDone.has('i'+i) ? '✓ ' : '○ '}${esc(x)}`,'recipecheck:i'+i,'recipe-line',`aria-pressed="${recipeDone.has('i'+i)}"`)).join('')}</div><h2>Method</h2>${r.steps.map((x,i)=>button(`<b>${i+1}.</b><span>${esc(x)}</span>`,'recipecheck:s'+i,'recipe-line recipe-step',`aria-pressed="${recipeDone.has('s'+i)}"`)).join('')}${r.notes ? `<h2>Personal notes</h2><p class="recipe-notes">${esc(r.notes)}</p>` : ''}${r.url ? '<p class="meta">Source: '+esc(r.url)+'. Use Share source for the original recipe.</p>' : ''}</article>` : `<div class="recipe-library"><div class="recipe-tools">${button('Saved','recipetab:saved','chip',`aria-pressed="${recipeTab==='saved'}"`)}${button('Find on web','recipetab:find','chip',`aria-pressed="${recipeTab==='find'}"`)}${button('Recent','recipetab:recent','chip',`aria-pressed="${recipeTab==='recent'}"`)}</div>${recipeTab==='find' ? `<div class="card recipe-intro"><h2>Find something to cook</h2><p>Search the web, open a recipe, then tap <b>Read recipe</b> in the tablet browser.</p><form id="recipe-search-form"><label for="recipe-search">Search recipes or enter a website</label><div class="recipe-input-row"><input id="recipe-search" name="query" maxlength="2048" placeholder="Try: easy vegetarian dinner" autocomplete="off"><button class="btn primary" type="submit">Search / Browse</button></div></form><p class="meta">Search uses DuckDuckGo. ${button('Open browser','recipebrowse','link')}</p><form id="recipe-form"><label for="recipe-url">Or paste a recipe link</label><div class="recipe-input-row"><input id="recipe-url" name="url" type="url" required maxlength="4096" placeholder="https://…" autocomplete="off"><button class="btn primary" type="submit">Open recipe</button></div><p class="meta">To paste: press and hold the link field, then choose Paste.</p><p id="recipe-error" role="status"></p></form><p class="meta">Open a preview, then tap Save recipe to keep it.</p></div>` : `<label for="recipe-filter">Search ${recipeTab==='recent' ? 'recent previews' : 'saved recipes'}</label><input id="recipe-filter" class="recipe-filter" value="${esc(recipeQuery)}" maxlength="200" placeholder="Search titles or tags"><p class="meta">${recipeList.filter(x=>x.saved).length} / 200 saved · Stored on this server</p><div class="recipe-cards">${recipeCards()}</div>`}<p class="meta recipe-footnote">Recipe Tracker is optional; your saved recipes stay in this dashboard.</p></div>`;
+    const libraryActions=!r && !recipeEditing ? `<div class="recipe-actions">${button(`${svg('<path d="M12 5v14M5 12h14"></path>',22)}New recipe`,'recipenew','btn primary')}${button('Open Recipe Tracker','recipetracker')}</div>` : '';
+    frame('Recipes',{data:{}},`<div class="recipe-scroll">${body}</div>`,libraryActions);
     $('.recipe-scroll').scrollTop=scroll;
   }
   async function openRecipe(id) {
@@ -863,14 +869,30 @@
   document.addEventListener('input',e=>{
     if(e.target.id==='recipe-filter'){recipeQuery=e.target.value;renderHTML($('.recipe-cards'),recipeCards());}
   });
-  let browserQuery='';
+  let browserQuery='', nativeBrowserOpen=false, nativeBrightness=null;
+  window.addEventListener('homehub:browser',e=>{nativeBrowserOpen=e.detail===true;});
+  window.addEventListener('homehub:device',e=>{
+    if (!navigator.userAgent.includes('HomeHubKiosk/')) return;
+    if(Number.isInteger(e.detail.brightness)) nativeBrightness=e.detail.brightness;
+    if(state.view==='settings')navigate('settings');
+  });
+  let brightnessTimer;
+  document.addEventListener('input',e=>{
+    if(e.target.id!=='tablet-brightness')return;
+    nativeBrightness=Number(e.target.value);
+    document.getElementById('brightness-value').textContent=nativeBrightness+'%';
+    clearTimeout(brightnessTimer);
+    brightnessTimer=setTimeout(()=>location.assign('homehub://brightness?value='+nativeBrightness),120);
+  });
   function browser() {
-    frame('Browser',{data:{}},`<div class="recipe-scroll"><div class="card recipe-intro"><h2>Browse the web</h2><form id="browser-form"><label for="browser-address">Search or enter a website</label><div class="recipe-input-row"><input id="browser-address" name="query" maxlength="2048" autocomplete="off" value="${esc(browserQuery)}" placeholder="Search words or https://…"><button class="btn primary" type="submit">Go</button></div></form><p>${button('Open browser','browseropen')}</p><p class="meta">Uses the tablet’s lightweight browser. Back, forward and reload controls are at the top; Dashboard returns here. On a computer, websites open in a separate tab.</p></div></div>`);
+    frame('Browser',{data:{}},`<div class="recipe-scroll"><div class="card recipe-intro browser-panel"><h2>Browse the web</h2><form id="browser-form"><label for="browser-address">Search or enter a website</label><div class="recipe-input-row"><input id="browser-address" name="query" maxlength="2048" autocomplete="off" value="${esc(browserQuery)}" placeholder="Search words or https://…"><button class="btn primary" type="submit">Go</button></div></form><p>${button('Open browser','browseropen')}</p><p class="meta">${navigator.userAgent.includes('HomeHubKiosk/') ? 'Browse here with the sidebar always available. Use Read recipe to save a clean recipe preview.' : 'Websites open in a separate browser tab.'}</p></div></div>`);
   }
   document.addEventListener('input',e=>{if(e.target.id==='browser-address')browserQuery=e.target.value;});
   function browseRecipes(query = "", recipe = true) {
     const text=String(query).trim().slice(0,2048);
     if (navigator.userAgent.includes("HomeHubKiosk/")) {
+      navigate("browser");
+      nativeBrowserOpen=true;
       location.assign("homehub://browse?query="+encodeURIComponent(text));
       return;
     }
@@ -1155,7 +1177,7 @@
     frame(
       "Settings",
       r,
-      `<div class="set-grid"><article class="card settings-scroll"><h2>Sources</h2>${state.status.data.sources.map((src, i) => `<div class="src row-line"><i class="dot ${state.status.stale || ["failed", "stale"].includes(src.state) ? "warn" : src.state === "sample" ? "sample" : ""}"></i><div class="grow"><b>${esc(src.name)}</b><span>${state.status.stale ? "Stale status" : esc(src.state)} · ${src.updatedAt ? esc(time(src.updatedAt)) : "Not connected"}</span></div>${button("Retry", `retry:${i}`, "link")}</div>`).join("")}<p class="meta">Sample sources are not connected to real services.</p></article><article class="card settings-scroll"><h2>Display</h2><div class="set-row"><span class="l">Clock</span><div class="seg">${button("12 hour", "clock:12", "", `aria-pressed="${!s.clock24h}"`)}${button("24 hour", "clock:24", "", `aria-pressed="${s.clock24h}"`)}</div></div><div class="set-row"><span class="l">Temperature</span><div class="seg">${["F", "C"].map((u) => button("°" + u, `units:${u}`, "", `aria-pressed="${s.units === u}"`)).join("")}</div></div>${[
+      `<div class="set-grid"><article class="card settings-scroll"><h2>Sources</h2>${state.status.data.sources.map((src, i) => `<div class="src row-line"><i class="dot ${state.status.stale || ["failed", "stale"].includes(src.state) ? "warn" : src.state === "sample" ? "sample" : ""}"></i><div class="grow"><b>${esc(src.name)}</b><span>${state.status.stale ? "Stale status" : esc(src.state)} · ${src.updatedAt ? esc(time(src.updatedAt)) : "Not connected"}</span></div>${button("Retry", `retry:${i}`, "link")}</div>`).join("")}<p class="meta">Sample sources are not connected to real services.</p></article><article class="card settings-scroll"><h2>Display</h2><div class="set-row brightness-control"><label for="tablet-brightness">Brightness</label><input id="tablet-brightness" type="range" min="10" max="100" step="1" value="${nativeBrightness ?? 70}" ${nativeBrightness===null ? "disabled" : ""}><output id="brightness-value">${nativeBrightness===null ? "Tablet only" : nativeBrightness+"%"}</output></div><div class="set-row"><span class="l">Clock</span><div class="seg">${button("12 hour", "clock:12", "", `aria-pressed="${!s.clock24h}"`)}${button("24 hour", "clock:24", "", `aria-pressed="${s.clock24h}"`)}</div></div><div class="set-row"><span class="l">Temperature</span><div class="seg">${["F", "C"].map((u) => button("°" + u, `units:${u}`, "", `aria-pressed="${s.units === u}"`)).join("")}</div></div>${[
         ["idleMinutes", "Screensaver after", "min"],
         ["photoSeconds", "Photo interval", "sec"],
         ["returnTodayMinutes", "Return to Today", "min"],
@@ -1375,6 +1397,7 @@
     navigate("today");
   }
   function idleCheck() {
+    if(nativeBrowserOpen)return;
     if (state.mode !== "active") {
       if (state.mode === "saver" && quiet()) enterSaver();
       else if (state.mode === "night" && !quiet()) enterSaver();
@@ -1790,7 +1813,8 @@
     await loadSettings();
     const recipeURL=new URLSearchParams(location.search).get("recipe");
     const recipeId=new URLSearchParams(location.search).get("recipeId");
-    await navigate(recipeURL || recipeId ? "recipes" : "today");
+    const catalog=new URLSearchParams(location.search).get("catalog")==="1";
+    await navigate(recipeURL || recipeId || catalog ? "recipes" : "today");
     if(recipeId && /^[a-f0-9]{12}$/.test(recipeId)) {await openRecipe(recipeId);if(activeRecipe){recipeFocus=true;drawRecipe();}}
     if(recipeURL) {await importRecipe(recipeURL);if(activeRecipe){recipeFocus=true;drawRecipe();}}
     refreshCommon();

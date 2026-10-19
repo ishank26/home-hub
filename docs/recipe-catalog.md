@@ -74,7 +74,16 @@ Latest owner override: the hourly reservoir and tablet cache now target up to300
 photos, replacing the earlier10-photo policy. The worker downloads up to300 within
 its600-second batch budget, under the existing512MiB server-cache limit. Tablet
 cache failures/quota pressure retain the prior complete sample. Synthetic tests
-exercise300 stored pairs; actual tablet acceptance currently covers10 photos
-(1887467 bytes), not300 real cloud photos. The worker authorization file is absent,
-so initial300-photo cloud population awaits owner-local Aura setup. The local
+exercise300 stored pairs. Aura is now authorized: the real hourly sample is300
+photos, and actual tablet IndexedDB acceptance verified300 photos plus thumbnails
+(46847388 bytes). The local
 Recipe Tracker profile chooser rendered successfully on the actual tablet.
+
+
+## Recipes navigation and fresh shell — 2026-10-18
+
+The owner clarified that Recipes must stay inside the dashboard, so the default
+sidebar route continues to display the local catalog. Recipe Tracker stays an
+optional explicit launch button. The proposed direct sidebar redirect was removed
+before publication. Existing recipeId/source reader links still work. Shell files
+require cache revalidation on reload; API responses remain no-store.
