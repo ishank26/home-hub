@@ -78,6 +78,23 @@ print('http://127.0.0.1:'+str(server.server_port),flush=True);server.serve_forev
     await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
     await page.locator('[data-action="nav:today"]').click();
     assert.equal(await page.locator('[data-camera-id]').count(),0);
+    // Battery cameras never request periodic snapshot bytes, but remain tappable.
+    const batteryHome=await (await page.request.get(base+'/api/home')).json();
+    batteryHome.cameras[3].onDemand=true;
+    const batteryId=batteryHome.cameras[3].id;
+    let batterySnapshots=0,liveRequest;
+    page.on('request',r=>{if(r.url().includes('/camera/'+batteryId+'.jpg'))batterySnapshots++;});
+    await page.route('**/api/home',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(batteryHome)}));
+    await page.locator('[data-action="nav:home"]').click();
+    await page.getByText('Tap to view · battery camera',{exact:true}).waitFor();
+    assert.equal(await page.locator('.cam img').count(),3);
+    await page.clock.runFor(31000);
+    assert.equal(batterySnapshots,0);
+    await page.unroute('**/api/camera/live');
+    await page.route('**/api/camera/live',route=>{liveRequest=route.request().postDataJSON();return route.fulfill({status:503,contentType:'application/json',body:'{"error":"synthetic unavailable"}'});});
+    await page.locator('[data-action="camera:3"]').click();
+    await page.getByText('Live video unavailable · close and reopen to retry',{exact:true}).waitFor();
+    assert.equal(liveRequest.id,batteryId);
     assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
     console.log('Camera UI passed: four decoded snapshots, stage bounds, one live-video failure viewer and decoder teardown, refresh/outage label, last image retained during outage, privacy clears images, repeated redraw URL bounds, navigation cleanup, no external requests or JS errors.');
   } finally {

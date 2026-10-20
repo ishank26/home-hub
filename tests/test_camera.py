@@ -81,3 +81,9 @@ class CameraTests(unittest.TestCase):
         self.assertNotIn('entity_picture', str(result))
         self.assertNotIn('x' * 40, str(result))
         self.assertNotIn('camera.test', str(result))
+
+    def test_battery_camera_metadata_requests_on_demand_display(self):
+        self.ha.entries['cameras'][0]['onDemand'] = True
+        result = self.ha.home()
+        self.assertTrue(result['cameras'][0]['onDemand'])
+        self.assertNotIn('camera.test', str(result))

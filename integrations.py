@@ -174,6 +174,8 @@ class HomeAssistant:
                             'available': available}
                     if kind == 'cameras':
                         item['available'] = state in ('idle', 'streaming', 'recording')
+                        if entry.get('onDemand') is True:
+                            item['onDemand'] = True
                         cameras.append(item)
                     elif kind == 'lights':
                         item.update(on=state == 'on', detail='Home Assistant' if available else 'Unavailable')
