@@ -142,7 +142,9 @@ under `~/.config/home-hub/` and runtime photos/data outside the checkout. Ignore
 rules and scanners reduce mistakes; they cannot guarantee detection of every
 possible secret. Keep the repository private.
 
-Next setup steps: authenticate the Aura mirror and finish the remaining device enrollment. HA to-do with an offline queue is
+Next setup steps: finish the remaining device enrollment and restore the currently
+unavailable HA cloud integrations (CalDAV calendars, Twinkly light). Aura photos are
+live (300 mirrored, hourly). HA to-do with an offline queue is
 still planned. The deployed Shopping list now shares names/checkmarks with HA;
 quantity, notes and category remain local. The original local list is retained.
 

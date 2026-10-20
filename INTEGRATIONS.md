@@ -160,23 +160,35 @@ owner to open HA Shopping and make an edit from that phone.
 
 The owner selected Aura support and requested protocol reverse engineering.
 A separate read-only mirror is implemented and reviewed; its pinned Pillow runtime
-and user timer templates are installed. Run `scripts/aura-setup` locally to sign in
-and choose one existing Aura frame. The helper completes an initial transactional
-sync, selects Aura in private config, restarts the dashboard and enables the
-fifteen-minute timer. iPhone photos can be added through the official Aura app.
+and user timer template are installed. iPhone photos can be added through the
+official Aura app and appear on the next successful sync.
 
-No Aura account is signed in yet and no personal photos have been downloaded.
-The timer remains disabled until successful setup. Protocol evidence, bounds,
-rollback and acceptance: [`docs/aura-protocol.md`](docs/aura-protocol.md).
+**Live since 2026-10-18.** The owner completed `scripts/aura-setup`: an existing
+Aura account is signed in, one frame selected, and the first transactional batch
+published. The hourly timer (`home-hub-aura.timer`) is enabled and running; the
+last verified runs (2026-10-20 10:00–15:00 EDT) each completed with `Aura sync
+completed: 300 photos` in roughly 88–93 s and ~91–99 MB peak RSS. The published
+manifest reports `state: current`, `sampling: hourly-random`,
+`windowLimited: false`, `syncPending: false`, 300 photo entries and a 47 MB
+normalised cache under `~/.local/share/home-hub/data/photos/`. No full archive
+is claimed and no Aura cloud writes occur.
+
+Outstanding for this subsystem: an upload through the official iPhone app
+observed end-to-end on the frame, and the frame-side screensaver acceptance
+(see `docs/aura-protocol.md`). Protocol evidence, bounds, rollback and
+acceptance: [`docs/aura-protocol.md`](docs/aura-protocol.md).
 
 ## Verification
 
-61 backend/image/HTTP/weather/shopping tests pass under the dedicated Aura runtime, with no skips.
-The existing desktop Chromium suite and new `tests/ui-aura.cjs` both pass. A separate
-1280×800 empty-integration check covers Setup needed, no fake events/devices,
-and Not connected timestamps. The physical frame displays its sample screensaver
-over the saved Wi-Fi URL after server restart, without USB forwarding. The UI test
-clock now follows the backend's current day; its earlier fixed October 12 date
+Backend/image/HTTP/weather/shopping/recipe/camera/phone tests: **128 pass, 7 skipped**
+(`python3 -m unittest discover -s tests`, verified 2026-10-20), run against the
+installed runtime. The existing desktop Chromium suite plus `tests/ui-aura.cjs`,
+`ui-camera.cjs`, `ui-govee.cjs` and `ui-recipes.cjs` are the browser gates; they need
+Node plus Playwright, which is not installed on this host, so they were not re-run in
+this pass. A separate 1280×800 empty-integration check covers Setup needed, no fake
+events/devices, and Not connected timestamps. The physical frame displays its sample
+screensaver over the saved Wi-Fi URL after server restart, without USB forwarding. The
+UI test clock now follows the backend's current day; its earlier fixed October 12 date
 eventually produced an empty calendar against date-relative samples.
 Independent review covered pairing, secret-file permissions, loopback-only
 credential transport, state validation, calendar caching, configuration helper
@@ -358,3 +370,39 @@ steps). Budget Bytes refused automated access and the tested Good Food Middle
 East page provided no supported metadata; both return honest errors. Site-specific
 scrapers, login/paywall access and native iPhone share-target enrollment are not
 implemented. Use the share link or paste a browser URL into Recipes.
+
+## Cloud integration outage — 2026-10-20
+
+A live audit of the deployed instance found every cloud-dependent HA integration
+down, while local ones were healthy. Entity states from the homehub token:
+
+| Entity | State | `last_changed` (UTC) |
+|---|---|---|
+| `calendar.home` | unavailable | 2026-10-19 20:12:54 |
+| `calendar.me_and_bubs` | unavailable | 2026-10-19 20:12:30 |
+| `calendar.work` (excluded from the dashboard) | unavailable | 2026-10-19 20:12:29 |
+| `light.home` (Twinkly) | unavailable | 2026-10-18 16:59:24 |
+| `weather.forecast_home` (Met.no) | unavailable | 2026-10-19 20:38:22 |
+| `camera.*` (local ONVIF) | available | — |
+
+The three calendars failed within 25 s of each other, which points at the CalDAV
+integration rather than at a single calendar or at Apple-side permission for one
+shared calendar. The staggered failures across different integrations
+(2026-10-18 16:59 → 2026-10-19 20:38) are consistent with HA's outbound cloud
+sessions degrading one by one rather than with a host-level network fault:
+`https://caldav.icloud.com/` answers HTTP 403 in 0.38 s from this host (a bare
+root 403 is the expected Apple response), and the dashboard's own Open-Meteo
+fetches stay `current`.
+
+The dashboard is behaving correctly under the failure: `/api/status` reports
+`calendar: failed`, `/api/today` returns `calendarSource: failed` with an empty
+event list, `/api/home` marks the Twinkly light `available: false` with detail
+`Unavailable`, and both cameras still return `available: true`. No sample data is
+substituted for the failing sources.
+
+Recovery is owner-local and needs an HA admin session or container access: reload
+the CalDAV config entry and, if it reports an authentication error, replace the
+Apple app-specific password; then reload Twinkly and Met.no. The homehub HA token
+is deliberately non-admin, so `/api/error_log` returns 401 and config-entry reload
+is unavailable from the dashboard credential — that isolation is working as
+designed and was not bypassed for this audit.

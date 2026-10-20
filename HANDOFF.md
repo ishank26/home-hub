@@ -18,20 +18,43 @@ holds every credential.
 | Reference repo | [wesbos/photo-frame-dashboard](https://github.com/wesbos/photo-frame-dashboard), inspected at `9dd323e`. Useful parts: `docs/pf1007l-start-here.md` (frame access tests), `docs/allwinner-a33-pf1007l.md` (WebView 106, kiosk, memory), `docs/aimor-remote-root-shell.md` (**read first**), and `dashboard/` (a Vite UI; not reused, because this project has no build step). |
 | Server context | `/home/ishank/work/home-server/MEMORY.md`, `/home/ishank/work/maxcaddy/AGENTS.md`: Home Assistant runs on a private bridge with a loopback UI. Camera, person, audio and location data must never enter the Hermes assistant. |
 
-## Current checkpoint — 2026-10-17
+## Current checkpoint — 2026-10-20
 
-Live: selected iCloud calendars, Open-Meteo weather, shared HA Shopping, Twinkly
-light and two local ONVIF C110 camera selections. Dedicated homehub credentials,
-source isolation, mutation readback and publication guards are installed. Camera
-snapshots pass real HA fetch and synthetic browser privacy/resource checks.
-The enlarged viewer now plays HLS video; the physical WebView rendered moving
-video and repeated desktop playlist reloads/decoder cleanup passed. Streaming
-runtime is installed; all HA/network access controls are retained.
-See INTEGRATIONS.md for precise evidence and limitations; older state below is
-historical. Owner deferred Aura sign-in. Remaining acceptance: Deco address
-reservations, additional camera/device credentials and supported LAN setup,
-physical privacy/contact tests, phone shopping edit, host reboot and multi-day
-soak. GitHub privacy restoration awaits owner authentication; do not claim private.
+Live: Open-Meteo weather, shared HA Shopping, two local ONVIF C110 camera
+selections and the Aura photo mirror (300 mirrored photos, hourly random
+sampling, 47 MB normalised cache, `state: current`). Dedicated homehub
+credentials, source isolation, mutation readback and publication guards are
+installed. Camera snapshots pass real HA fetch and synthetic browser
+privacy/resource checks. The enlarged viewer plays HLS video; the physical
+WebView rendered moving video and repeated desktop playlist reloads/decoder
+cleanup passed. Streaming runtime is installed; all HA/network access controls
+are retained.
+
+**Regressed as of 2026-10-20 (verified live, not in the older sections below):**
+every cloud-backed HA integration is unavailable — `calendar.home`,
+`calendar.me_and_bubs` and the excluded `calendar.work` went unavailable at
+2026-10-19 20:12 UTC, `light.home` (Twinkly) at 2026-10-18 16:59 UTC, and
+`weather.forecast_home` at 2026-10-19 20:38 UTC. Local ONVIF cameras remain
+available, and host-side HTTPS to `caldav.icloud.com` succeeds (HTTP 403 on the
+bare root is normal), so this is not host DNS/reachability. The dashboard
+correctly reports `calendarSource: failed` and an unavailable light. The
+homehub HA token is non-admin, so HA's error log and config-entry reload are not
+reachable from here; recovery needs an admin reload/restart of the CalDAV and
+Twinkly entries, or a new Apple app-specific password if Apple revoked it.
+
+Remaining acceptance: HA cloud-integration recovery, Deco address reservations,
+Tapo D205 install/enrolment, Govee key, physical privacy/contact tests, phone
+shopping edit, host reboot and multi-day soak. GitHub privacy restoration awaits
+owner authentication; do not claim private.
+
+**Admission drift — open owner decision.** The deployed
+`~/.config/home-hub/config.json` allows `192.168.68.0/22`, not the exact frame
+/32 described below. The "No subnet-wide admission or firewall widening was
+used" statement in INTEGRATIONS.md is therefore no longer true, and every host
+in the /22 with the device cookie can reach the dashboard. This widened value
+was not made or documented by a reviewed change; decide whether to restore the
+/32 (requires the Deco reservation to stop DHCP churn) or record the /22 as an
+accepted, deliberate policy.
 
 ## Current state (verified 2026-10-12)
 
@@ -314,3 +337,54 @@ C110 cloud login hit a thirty-minute DEVICE_BLOCKED response; no more blind retr
 Owner enabled Camera Account; local2020/554 ports now reachable. ONVIF form is
 prepared for owner-local camera credentials after block recovery. No camera feed
 or snapshot proxy has been enabled yet. Aura remains explicitly deferred.
+
+## 2026-10-20 — Verification pass, owner-runbook for the remaining gates
+
+Re-verified the deployed service instead of trusting the 2026-10-17/18 notes.
+`home-hub.service` is active (up 1d 7h, 12.8 MB RSS, 4 tasks) and
+`home-hub-aura.timer` is enabled with successful hourly runs. 128 backend tests
+pass with 7 skipped. Live authenticated API reads over the LAN address return
+`weather: open-meteo`, `shopping: homeassistant`, two cameras (both `available`),
+`photos: aura` with 300 photo ids and `state: current`, and
+`calendarSource: failed`.
+
+Everything still open is gated on a credential, a password prompt, physical
+hardware, or a router admin UI. Nothing below can be completed from a
+non-admin, non-sudo, no-`adb` session; each is written so the owner can finish
+it in one pass.
+
+1. **Restore HA cloud integrations (highest impact).** Both CalDAV calendars and
+   Twinkly are `unavailable`, so Calendar shows nothing and the light is
+   `Unavailable`. In Home Assistant open Settings → Devices & services and
+   reload (or remove/re-add) the **CalDAV** entry; if it fails with an auth
+   error, generate a new Apple **app-specific password** and re-enter it (the
+   Apple ID password itself is never stored). Reload the **Twinkly** entry, then
+   the Met.no weather entry. The dashboard picks the fix up on its next refresh;
+   no restart of `home-hub.service` is needed.
+2. **Tapo D205 (battery) camera.** Still not installed; `/var/lib/home-hub/` and
+   `/usr/local/sbin/home-hub-install-tapo` do not exist. After the reviewed
+   installer is approved:
+   `sudo install -o root -g root -m 755 scripts/install-tapo-control.py /usr/local/sbin/home-hub-install-tapo`
+   then `sudo /usr/local/sbin/home-hub-install-tapo`, then enrol in
+   Settings → Devices & services → *Tapo: Cameras Control* with *Skip RTSP
+   validation*, and only then add the camera to the dashboard with
+   `onDemand: true`. Acceptance list: `docs/tapo-cameras-control.md`.
+3. **Govee.** No key is configured. Owner obtains an API key in Govee Home,
+   runs `python3 scripts/configure-govee`, then
+   `systemctl --user restart home-hub.service`. A live device readback is still
+   required before claiming Govee works.
+4. **Deco DHCP reservation for the frame.** Unconfirmed, and the deployed
+   admission is now the whole `192.168.68.0/22` instead of the frame /32 (see the
+   admission-drift note above). Reserve the frame's MAC, then decide whether to
+   narrow `network.allow` back to a /32.
+5. **Physical frame acceptance.** `adb devices` is empty (USB disconnected), so
+   these are unverified: privacy-mode switching per camera, door-contact test,
+   native WebView screensaver/upload check, second C110 stream green-frame fix
+   (it currently renders at 640×360 via MinorStream with a bottom-edge padding
+   artifact), host reboot, and the multi-day soak with an HA/Internet outage.
+6. **iPhone/Android acceptance.** One Shopping edit from the iPhone HA app, and
+   the Share-Sheet shortcut / native share-target install from
+   `docs/phone-recipe-sharing.md`.
+7. **GitHub privacy.** `gh` is not installed and no push credentials were used
+   here, so repository visibility remains unconfirmed. Keep the repo private and
+   keep secrets in `~/.config/home-hub/` (0600).
